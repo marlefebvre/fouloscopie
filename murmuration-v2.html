@@ -313,13 +313,14 @@
   <div class="section">
     <div class="section-label">Presets comportementaux</div>
     <div class="preset-grid">
-      <button class="preset-btn active" data-preset="etourneaux">🐦 Étourneaux</button>
+      <button class="preset-btn active" data-preset="defaut">⚖️ Défaut</button>
+      <button class="preset-btn" data-preset="etourneaux">🐦 Étourneaux</button>
       <button class="preset-btn" data-preset="poissons">🐟 Banc de poissons</button>
       <button class="preset-btn" data-preset="moucherons">🦟 Moucherons</button>
       <button class="preset-btn" data-preset="turbulences">🌪 Turbulences</button>
     </div>
     <div id="preset-desc" style="font-size:0.7rem;color:#444466;line-height:1.5;margin-top:8px;">
-      Murmuration classique — séparation, alignement et cohésion équilibrés.
+      Valeurs Reynolds équilibrées — point de départ neutre pour explorer.
     </div>
   </div>
 
@@ -1233,13 +1234,21 @@ function updateSelectedInfo() {
 
 // ── Presets ───────────────────────────────────────────────────
 const PRESETS = {
-  etourneaux: {
-    desc: 'Murmuration classique — séparation, alignement et cohésion équilibrés.',
+  defaut: {
+    desc: 'Valeurs Reynolds équilibrées — point de départ neutre pour explorer.',
     sepOn: true,  aliOn: true,  cohOn: true,
     sepR: 30,  sepW: 15,   // 1.5
     aliR: 60,  aliW: 10,   // 1.0
     cohR: 100, cohW: 10,   // 1.0
     speed: 15,             // 3.0
+  },
+  etourneaux: {
+    desc: 'Étourneau sansonnet — alignement dominant sur 7 voisins, séparation serrée, vitesse élevée (d\'après Ballerini et al., 2008).',
+    sepOn: true,  aliOn: true,  cohOn: true,
+    sepR: 24,  sepW: 22,   // 2.2 — évitement de collision très réactif
+    aliR: 85,  aliW: 20,   // 2.0 — copie de vélocité sur voisins lointains
+    cohR: 110, cohW:  7,   // 0.7 — cohésion modérée (l'alignement suffit)
+    speed: 20,             // 4.0 — ~10 m/s à l'échelle
   },
   poissons: {
     desc: 'Banc très synchronisé — forte répulsion rapprochée et alignement dominant.',
