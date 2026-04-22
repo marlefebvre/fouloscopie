@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murmuration — Fouloscopie</title>
+  <script src="lib/p5.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #04030f;
+      color: #e0e0f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── CANVAS ── */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+      transition: flex 0s;
+    }
+    #canvas-wrap.obs-cursor { cursor: crosshair; }
+    #canvas-wrap canvas { display: block; }
+
+    #canvas-hint {
+      position: absolute;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.14);
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 0.4s;
+    }
+
+    #obs-hint {
+      position: absolute;
+      top: 14px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.78rem;
+      color: rgba(200,160,255,0.85);
+      background: rgba(80,40,120,0.5);
+      border: 1px solid rgba(160,100,255,0.3);
+      padding: 6px 14px; border-radius: 20px;
+      pointer-events: none; display: none; white-space: nowrap;
+    }
+
+    /* ── CINEMA ── */
+    #panel {
+      transition: width 0.38s cubic-bezier(0.4,0,0.2,1),
+                  min-width 0.38s cubic-bezier(0.4,0,0.2,1),
+                  border-color 0.38s;
+    }
+    body.cinema #panel { width: 0 !important; min-width: 0 !important; overflow: hidden; border-color: transparent; }
+    body.cinema #canvas-hint { opacity: 0; }
+
+    #cinema-hint { display: none; } /* géré via canvas HUD */
+
+    /* ── PANEL ── */
+    #panel {
+      width: 290px; min-width: 290px;
+      background: rgba(8,8,24,0.97);
+      border-left: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+    }
+    #panel::-webkit-scrollbar { width: 4px; }
+    #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .panel-header {
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    .back-btn {
+      color: #555577; text-decoration: none; font-size: 0.8rem;
+      padding: 4px 9px; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; transition: all 0.2s; white-space: nowrap;
+    }
+    .back-btn:hover { color: #9999bb; border-color: rgba(255,255,255,0.18); }
+    .panel-title { font-size: 0.95rem; font-weight: 600; color: #c0c0e0; }
+
+    .section {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+    .section-label {
+      font-size: 0.65rem; text-transform: uppercase;
+      letter-spacing: 0.18em; color: #444466; font-weight: 700; margin-bottom: 11px;
+    }
+
+    /* ── RULE BLOCKS ── */
+    .rule-block {
+      margin-bottom: 10px; padding: 11px 12px;
+      border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.02);
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .rule-block.off { opacity: 0.38; }
+    .rule-block.sep { border-color: rgba(255,90,90,0.15); }
+    .rule-block.ali { border-color: rgba(90,210,90,0.12); }
+    .rule-block.coh { border-color: rgba(74,158,255,0.12); }
+    .rule-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+    .rule-name { display: flex; align-items: center; gap: 7px; font-size: 0.85rem; font-weight: 600; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .rule-desc { font-size: 0.72rem; color: #55557a; line-height: 1.5; margin-bottom: 9px; }
+
+    /* ── TOGGLE ── */
+    .toggle { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
+    .toggle input { display: none; }
+    .tog {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 18px; cursor: pointer; transition: background 0.2s;
+    }
+    .tog::after {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; background: #fff;
+      border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s;
+    }
+    .toggle input:checked + .tog { background: #4a9eff; }
+    .toggle input:checked + .tog::after { left: 19px; }
+    .sep .toggle input:checked + .tog { background: #ff5a5a; }
+    .ali .toggle input:checked + .tog { background: #5ad25a; }
+    .coh .toggle input:checked + .tog { background: #4a9eff; }
+
+    /* ── SLIDERS ── */
+    .slider-row { margin-bottom: 7px; }
+    .slider-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+    .slider-name { font-size: 0.72rem; color: #7777aa; }
+    .slider-val  { font-size: 0.72rem; color: #9999cc; font-weight: 600; min-width: 28px; text-align: right; }
+    input[type=range] {
+      width: 100%; height: 3px;
+      -webkit-appearance: none; appearance: none;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px; height: 13px;
+      border-radius: 50%; background: #4a9eff;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+    .sep input[type=range]::-webkit-slider-thumb { background: #ff5a5a; }
+    .ali input[type=range]::-webkit-slider-thumb { background: #5ad25a; }
+    .coh input[type=range]::-webkit-slider-thumb { background: #4a9eff; }
+
+    /* ── CONTROLS ── */
+    .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .ctrl-label { font-size: 0.8rem; color: #8888aa; }
+    .ctrl-hint  { font-size: 0.7rem; color: #444466; line-height: 1.5; margin-top: -4px; margin-bottom: 8px; }
+
+    /* ── LÉGENDE ── */
+    .legend { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: #7777aa; }
+
+    /* ── BOUTONS ── */
+    .btn {
+      width: 100%; padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #a0a0c0; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; text-align: left;
+      transition: all 0.2s; margin-bottom: 6px; font-family: inherit;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); color: #c0c0e0; }
+    .btn.active-red    { background: rgba(255,80,80,0.12);   border-color: rgba(255,80,80,0.3);   color: #ff7777; }
+    .btn.active-purple { background: rgba(160,80,255,0.12);  border-color: rgba(160,80,255,0.3);  color: #cc88ff; }
+    .btn.active-gold   { background: rgba(255,200,50,0.12);  border-color: rgba(255,200,50,0.3);  color: #ffd050; }
+
+    /* ── INFO PANEL ── */
+    #info-section { padding: 14px 18px; flex: 1; }
+    #status-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 11px 12px;
+      font-size: 0.78rem; color: #7777aa; line-height: 1.65; min-height: 70px;
+    }
+    #selected-box {
+      display: none; margin-top: 10px;
+      background: rgba(74,158,255,0.06);
+      border: 1px solid rgba(74,158,255,0.18);
+      border-radius: 10px; padding: 11px 12px;
+    }
+    #selected-box .sel-title {
+      font-size: 0.7rem; font-weight: 700;
+      color: #4a9eff; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 7px;
+    }
+    #selected-content { font-size: 0.77rem; color: #8888bb; line-height: 1.65; }
+    #selected-content strong { color: #aaaadd; }
+
+    /* ── POLARISATION PANEL BAR ── */
+    #phi-section { margin-top: 12px; }
+    #phi-bar-wrap {
+      height: 4px; background: rgba(255,255,255,0.07);
+      border-radius: 2px; overflow: hidden; flex: 1;
+    }
+    #phi-bar { height: 100%; width: 0%; border-radius: 2px; transition: width 0.4s, background 0.4s; }
+
+    /* ── COUNTER ── */
+    #counter {
+      font-size: 0.68rem; color: #333355;
+      padding: 8px 18px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body class="cinema">
+
+<div id="canvas-wrap">
+  <div id="canvas-hint">Clic = inspecter · Molette = zoom · Double-clic = réinitialiser · <kbd style="font-family:inherit">C</kbd> = cinéma</div>
+  <div id="obs-hint">🪨 Mode obstacles actif — Clic gauche : ajouter · Clic droit : supprimer</div>
+</div>
+
+<div id="cinema-hint">Appuyez sur C pour quitter le mode cinéma</div>
+
+<aside id="panel">
+  <div class="panel-header">
+    <a href="index.html" class="back-btn">← Accueil</a>
+    <span class="panel-title">🐦 Murmuration</span>
+  </div>
+
+  <!-- RÈGLES -->
+  <div class="section">
+    <div class="section-label">Règles de Reynolds</div>
+
+    <div class="rule-block sep" id="block-sep">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#ff5a5a"></div>Séparation</div>
+        <label class="toggle"><input type="checkbox" id="tog-sep" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent s'éloigne de ses voisins trop proches pour éviter la collision.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-sep-r">30</span></div>
+        <input type="range" id="sep-r" min="5" max="120" value="30">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-sep-w">1.5</span></div>
+        <input type="range" id="sep-w" min="0" max="50" value="15">
+      </div>
+    </div>
+
+    <div class="rule-block ali" id="block-ali">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#5ad25a"></div>Alignement</div>
+        <label class="toggle"><input type="checkbox" id="tog-ali" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent copie la direction et la vitesse de ses voisins proches.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-ali-r">60</span></div>
+        <input type="range" id="ali-r" min="10" max="200" value="60">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-ali-w">1.0</span></div>
+        <input type="range" id="ali-w" min="0" max="50" value="10">
+      </div>
+    </div>
+
+    <div class="rule-block coh" id="block-coh">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#4a9eff"></div>Cohésion</div>
+        <label class="toggle"><input type="checkbox" id="tog-coh" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent se dirige vers le centre de masse de son groupe local.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-coh-r">100</span></div>
+        <input type="range" id="coh-r" min="10" max="300" value="100">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-coh-w">1.0</span></div>
+        <input type="range" id="coh-w" min="0" max="50" value="10">
+      </div>
+    </div>
+  </div>
+
+  <!-- SIMULATION -->
+  <div class="section">
+    <div class="section-label">Simulation</div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Nombre d'agents</span><span class="slider-val" id="v-count">500</span></div>
+      <input type="range" id="s-count" min="5" max="1500" value="500">
+    </div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Vitesse maximale</span><span class="slider-val" id="v-speed">3.0</span></div>
+      <input type="range" id="s-speed" min="5" max="30" value="15">
+    </div>
+  </div>
+
+  <!-- CAMÉRA -->
+  <div class="section">
+    <div class="section-label">Caméra</div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Suivre l'agent sélectionné</span>
+      <label class="toggle"><input type="checkbox" id="tog-follow"><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-hint">Molette = zoom · Double-clic = vue d'ensemble</div>
+  </div>
+
+  <!-- VISUALISATION -->
+  <div class="section">
+    <div class="section-label">Visualisation</div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">🌅 Ciel crépusculaire</span>
+      <label class="toggle"><input type="checkbox" id="tog-sky" checked><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">🌠 Traînées lumineuses</span>
+      <label class="toggle"><input type="checkbox" id="tog-trails"><div class="tog"></div></label>
+    </div>
+    <div class="slider-row" id="trail-len-row">
+      <div class="slider-meta"><span class="slider-name">Longueur des traînées</span><span class="slider-val" id="v-trail-len">35</span></div>
+      <input type="range" id="s-trail-len" min="8" max="70" value="35">
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Vecteurs de vitesse</span>
+      <label class="toggle"><input type="checkbox" id="tog-vec"><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Couleur par règle dominante</span>
+      <label class="toggle"><input type="checkbox" id="tog-col"><div class="tog"></div></label>
+    </div>
+    <div class="section-label" style="margin-top:10px;">Légende</div>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#ff5a5a"></div>Séparation dominante</div>
+      <div class="legend-item"><div class="dot" style="background:#5ad25a"></div>Alignement dominant</div>
+      <div class="legend-item"><div class="dot" style="background:#4a9eff"></div>Cohésion dominante</div>
+    </div>
+
+    <!-- POLARISATION -->
+    <div id="phi-section">
+      <div class="section-label" style="margin-top:14px;">Polarisation Φ (Vicsek)</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+        <div id="phi-bar-wrap"><div id="phi-bar"></div></div>
+        <div id="phi-val" style="font-size:0.75rem;color:#9999cc;font-weight:600;min-width:32px;text-align:right">0.00</div>
+      </div>
+      <div style="font-size:0.68rem;color:#444466;line-height:1.5">0 = désordre total · 1 = vol parfaitement aligné</div>
+    </div>
+  </div>
+
+  <!-- INTERACTIONS -->
+  <div class="section">
+    <div class="section-label">Interactions</div>
+    <button class="btn" id="btn-pred">🦅 Activer le prédateur (souris)</button>
+    <button class="btn" id="btn-obs">🪨 Mode placement d'obstacles</button>
+    <div id="obs-controls" style="display:none">
+      <div class="slider-row" style="margin-top:2px;">
+        <div class="slider-meta"><span class="slider-name">Taille de l'obstacle</span><span class="slider-val" id="v-obs-r">40</span></div>
+        <input type="range" id="obs-r" min="10" max="120" value="40">
+      </div>
+      <button class="btn" id="btn-clear-obs" style="margin-top:2px">✕ Effacer tous les obstacles</button>
+    </div>
+    <button class="btn" id="btn-cinema">🎬 Mode cinéma  <span style="color:#555577;font-size:0.72rem">[C]</span></button>
+    <button class="btn" id="btn-scatter">💥 Disperser le groupe</button>
+    <button class="btn" id="btn-reset">↺ Réinitialiser</button>
+  </div>
+
+  <!-- INFO -->
+  <div id="info-section">
+    <div class="section-label">Ce qui se passe</div>
+    <div id="status-box">Simulation en cours. Cliquez sur un agent pour l'inspecter et visualiser ses zones de perception.</div>
+    <div id="selected-box">
+      <div class="sel-title">Agent inspecté</div>
+      <div id="selected-content"></div>
+    </div>
+  </div>
+
+  <div id="counter">— agents · — fps</div>
+</aside>
+
+<script>
+// ================================================================
+// FOULOSCOPIE — Murmuration v3 — Immersive Edition
+// Reynolds (1986) · Vortex Couzin (2001) · Polarisation Vicsek
+// ================================================================
+
+const sim = (p) => {
+
+  // ── État ────────────────────────────────────────────────────
+  let boids     = [];
+  let selected  = null;
+  let predMode  = false;
+  let obsMode   = false;
+  let obstacles = [];
+  let followMode = false;
+  let cinemaMode = true;
+  let vortexDir  = Math.random() > 0.5 ? 1 : -1;
+
+  let stars = [];
+  let phi   = 0;   // polarisation lissée (Vicsek)
+  let skyGrad = null, glowGrad = null, skyGradH = -1;
+
+  let cam = { x: 0, y: 0, zoom: 1 };
+
+  // ── Grille spatiale — réduit O(n²) → O(n·k) ─────────────────
+  // Chaque boid ne consulte que les cellules dans son rayon max,
+  // au lieu de parcourir les n autres boids.
+  const grid = {
+    cells: new Map(),
+    cellSize: 100,
+    _k(cx, cy) { return (cx & 0x3FFF) | ((cy & 0x3FFF) << 14); },
+    clear() { this.cells.clear(); },
+    insert(b) {
+      const k = this._k(Math.floor(b.pos.x / this.cellSize), Math.floor(b.pos.y / this.cellSize));
+      let c = this.cells.get(k);
+      if (!c) { c = []; this.cells.set(k, c); }
+      c.push(b);
+    },
+  };
+  let fpsFrames = 0, fpsLast = 0, lastFps = 60;
+
+  const g = id => document.getElementById(id);
+
+  // ── Paramètres ──────────────────────────────────────────────
+  function pr() {
+    return {
+      sepOn   : g('tog-sep').checked,
+      aliOn   : g('tog-ali').checked,
+      cohOn   : g('tog-coh').checked,
+      sepR    : +g('sep-r').value,
+      aliR    : +g('ali-r').value,
+      cohR    : +g('coh-r').value,
+      sepW    : +g('sep-w').value / 10,
+      aliW    : +g('ali-w').value / 10,
+      cohW    : +g('coh-w').value / 10,
+      count   : +g('s-count').value,
+      speed   : +g('s-speed').value / 5,
+      obsR    : +g('obs-r').value,
+      sky     : g('tog-sky').checked,
+      trails  : g('tog-trails').checked,
+      trailLen: +g('s-trail-len').value,
+      vectors : g('tog-vec').checked,
+      colors  : g('tog-col').checked,
+    };
+  }
+
+  // ── Coord écran → monde ─────────────────────────────────────
+  function toWorld(sx, sy) {
+    return p.createVector((sx - cam.x) / cam.zoom, (sy - cam.y) / cam.zoom);
+  }
+  function worldMouse() { return toWorld(p.mouseX, p.mouseY); }
+
+  // ── Polarisation Vicsek  ──────────────────────────────────
+  function calcPolarization() {
+    if (boids.length === 0) return 0;
+    let sx = 0, sy = 0;
+    for (const b of boids) {
+      const m = b.vel.mag();
+      if (m > 0.001) { sx += b.vel.x / m; sy += b.vel.y / m; }
+    }
+    return Math.sqrt(sx * sx + sy * sy) / boids.length;
+  }
+
+  // ── Étoiles ─────────────────────────────────────────────────
+  function generateStars() {
+    stars = [];
+    for (let i = 0; i < 100; i++) {
+      stars.push({
+        x: p.random(p.width),
+        y: p.random(p.height * 0.68),
+        r: p.random(0.3, 1.6),
+        a: p.random(30, 110),
+        phase: p.random(p.TWO_PI),
+      });
+    }
+  }
+
+  // ── Fond : ciel crépusculaire ────────────────────────────────
+  function drawSky() {
+    const dc = p.drawingContext;
+    // Cache gradient — recréé uniquement si le canvas change de taille
+    if (skyGradH !== p.height) {
+      skyGrad = dc.createLinearGradient(0, 0, 0, p.height);
+      skyGrad.addColorStop(0,    'rgb(3, 3, 14)');
+      skyGrad.addColorStop(0.50, 'rgb(7, 5, 22)');
+      skyGrad.addColorStop(0.72, 'rgb(18, 6, 20)');
+      skyGrad.addColorStop(0.88, 'rgb(48, 10, 6)');
+      skyGrad.addColorStop(1,    'rgb(75, 18, 4)');
+      glowGrad = dc.createRadialGradient(p.width/2, p.height, 10, p.width/2, p.height, p.width * 0.65);
+      glowGrad.addColorStop(0,   'rgba(130,50,10,0.22)');
+      glowGrad.addColorStop(0.5, 'rgba(80,20,5,0.08)');
+      glowGrad.addColorStop(1,   'rgba(0,0,0,0)');
+      skyGradH = p.height;
+    }
+    dc.fillStyle = skyGrad;
+    dc.fillRect(0, 0, p.width, p.height);
+    dc.fillStyle = glowGrad;
+    dc.fillRect(0, 0, p.width, p.height);
+
+    // Étoiles — drawingContext direct, pas de surcharge p5 par étoile
+    dc.save();
+    dc.strokeStyle = 'transparent';
+    const fc = p.frameCount;
+    const h6 = p.height * 0.6;
+    for (const s of stars) {
+      const twinkle = 0.65 + 0.35 * Math.sin(fc * 0.015 + s.phase);
+      const yFade   = 1 - Math.min(s.y / h6, 1) * 0.5;
+      dc.fillStyle = `rgba(240,240,255,${(s.a * twinkle * yFade / 255).toFixed(2)})`;
+      dc.beginPath();
+      dc.arc(s.x, s.y, s.r, 0, 6.2832);
+      dc.fill();
+    }
+    dc.restore();
+  }
+
+  // ── Fond solide (sans ciel) ──────────────────────────────────
+  function drawSolid(trails) {
+    if (trails) {
+      p.fill(7, 7, 26, 30); p.noStroke();
+      p.rect(0, 0, p.width, p.height);
+    } else {
+      p.background(7, 7, 26);
+    }
+  }
+
+  // ── Classe Boid ─────────────────────────────────────────────
+  class Boid {
+    constructor(x, y) {
+      this.pos   = p.createVector(x, y);
+      this.vel   = p5.Vector.random2D().mult(p.random(1.5, 3));
+      this.acc   = p.createVector(0, 0);
+      this.rule  = 'cohesion';
+      this.trail = [];
+    }
+
+    flock(grid, params, predPos, flockCenter) {
+      const s = params.speed, f = 0.09;
+      const px = this.pos.x, py = this.pos.y;
+      const vx = this.vel.x, vy = this.vel.y;
+      const sepR2 = params.sepR * params.sepR;
+      const aliR2 = params.aliR * params.aliR;
+      const cohR2 = params.cohR * params.cohR;
+
+      let sepX = 0, sepY = 0, sepN = 0;
+      let aliX = 0, aliY = 0, aliN = 0;
+      let cohX = 0, cohY = 0, cohN = 0;
+
+      // ── Grille spatiale : ne visite que les cellules dans le rayon max ──
+      const cs = grid.cellSize;
+      const maxR = Math.max(params.sepOn ? params.sepR : 0, params.aliOn ? params.aliR : 0, params.cohOn ? params.cohR : 0);
+      const x0 = Math.floor((px - maxR) / cs), x1 = Math.floor((px + maxR) / cs);
+      const y0 = Math.floor((py - maxR) / cs), y1 = Math.floor((py + maxR) / cs);
+      for (let cx = x0; cx <= x1; cx++) {
+        for (let cy = y0; cy <= y1; cy++) {
+          const cell = grid.cells.get(grid._k(cx, cy));
+          if (!cell) continue;
+          for (const o of cell) {
+            if (o === this) continue;
+            const dx = o.pos.x - px, dy = o.pos.y - py;
+            const d2 = dx * dx + dy * dy;
+            if (params.sepOn && d2 > 0.01 && d2 < sepR2) {
+              sepX -= dx / d2;  sepY -= dy / d2;  sepN++;
+            }
+            if (params.aliOn && d2 < aliR2) {
+              aliX += o.vel.x;  aliY += o.vel.y;  aliN++;
+            }
+            if (params.cohOn && d2 < cohR2) {
+              cohX += o.pos.x;  cohY += o.pos.y;  cohN++;
+            }
+          }
+        }
+      }
+
+      // ── Conversion raw → force de steering (O(1) par boid) ──
+      // steer(vecteur désiré, poids, force max) → [fx, fy]
+      const steer = (mx, my, w, maxF) => {
+        const m = Math.sqrt(mx * mx + my * my);
+        if (m < 0.0001) return [0, 0];
+        let sx = mx / m * s - vx, sy = my / m * s - vy;
+        const sl = Math.sqrt(sx * sx + sy * sy);
+        if (sl > maxF) { const r = maxF / sl; sx *= r; sy *= r; }
+        return [sx * w, sy * w];
+      };
+
+      const [sepFx, sepFy] = sepN > 0 ? steer(sepX / sepN, sepY / sepN, params.sepW, f) : [0, 0];
+      const [aliFx, aliFy] = aliN > 0 ? steer(aliX / aliN, aliY / aliN, params.aliW, f) : [0, 0];
+      const [cohFx, cohFy] = cohN > 0 ? steer(cohX / cohN - px, cohY / cohN - py, params.cohW, f * 0.6) : [0, 0];
+
+      this.acc.x += sepFx + aliFx + cohFx;
+      this.acc.y += sepFy + aliFy + cohFy;
+
+      // Règle dominante (magnitude² suffit pour comparer)
+      const sm = sepFx*sepFx + sepFy*sepFy;
+      const am = aliFx*aliFx + aliFy*aliFy;
+      const cm = cohFx*cohFx + cohFy*cohFy;
+      if      (sm > am && sm > cm && sm > 2.5e-7) this.rule = 'separation';
+      else if (am > cm && am > 2.5e-7)            this.rule = 'alignment';
+      else if (cm > 2.5e-7)                       this.rule = 'cohesion';
+
+      // Obstacles (peu nombreux → pas critique)
+      this._avoidObstacles(obstacles, s, f);
+
+      if (predPos) {
+        const dpx = this.pos.x - predPos.x, dpy = this.pos.y - predPos.y;
+        const d = Math.sqrt(dpx*dpx + dpy*dpy);
+        if (d < 160 && d > 0.01) {
+          const fm = s / d;
+          const flee = p.createVector(dpx*fm, dpy*fm);
+          this.acc.add(p5.Vector.sub(flee, this.vel).limit(f * 6));
+        }
+        if (flockCenter) {
+          const predD = p5.Vector.dist(predPos, flockCenter);
+          if (predD < 280) {
+            const vortex = this._vortex(flockCenter, s, f);
+            this.acc.add(vortex.mult(p.map(predD, 0, 280, 1.4, 0)));
+          }
+        }
+      }
+    }
+
+    _avoidObstacles(obstacles, s, f) {
+      for (const obs of obstacles) {
+        const dx = this.pos.x - obs.x, dy = this.pos.y - obs.y;
+        const d = Math.sqrt(dx*dx + dy*dy);
+        const buf = obs.r + 40;
+        if (d < buf && d > 0) {
+          const push = p.createVector(dx/d*s - this.vel.x, dy/d*s - this.vel.y);
+          if (push.mag() > f*4) push.setMag(f*4);
+          push.mult(1 - d / buf);
+          this.acc.add(push);
+        }
+      }
+    }
+
+    _vortex(center, s, f) {
+      const toC = p5.Vector.sub(center, this.pos);
+      const tan = p.createVector(-toC.y * vortexDir, toC.x * vortexDir);
+      return p5.Vector.sub(tan.setMag(s), this.vel).limit(f * 1.8);
+    }
+
+    update(params) {
+      this.vel.add(this.acc).limit(params.speed);
+      this.pos.add(this.vel);
+      this.acc.set(0, 0);
+
+      // Trail buffer
+      if (params.trails) {
+        this.trail.push({ x: this.pos.x, y: this.pos.y });
+        while (this.trail.length > params.trailLen) this.trail.shift();
+      } else {
+        if (this.trail.length > 0) this.trail = [];
+      }
+
+      // Éjection des obstacles
+      for (const obs of obstacles) {
+        const obsV = p.createVector(obs.x, obs.y);
+        const d = p5.Vector.dist(this.pos, obsV);
+        if (d < obs.r + 4) {
+          this.pos = p5.Vector.add(obsV, p5.Vector.sub(this.pos, obsV).normalize().mult(obs.r + 5));
+        }
+      }
+
+      // Traversée des bords
+      const pad = 12;
+      if (this.pos.x > p.width  + pad) this.pos.x = -pad;
+      if (this.pos.x < -pad)           this.pos.x = p.width + pad;
+      if (this.pos.y > p.height + pad) this.pos.y = -pad;
+      if (this.pos.y < -pad)           this.pos.y = p.height + pad;
+    }
+
+    getColor(useColors) {
+      if (!useColors) return p.color(200, 210, 240, 210);
+      switch (this.rule) {
+        case 'separation': return p.color(255, 90, 90, 220);
+        case 'alignment':  return p.color(90, 210, 90, 220);
+        default:           return p.color(74, 158, 255, 220);
+      }
+    }
+
+    drawTrail(params) {
+      if (this.trail.length < 2) return;
+      // RGB codé en dur — évite p.red()/p.green()/p.blue() et la création d'un objet Color
+      let cr, cg, cb;
+      if (!params.colors)        { cr = 200; cg = 210; cb = 240; }
+      else switch (this.rule) {
+        case 'separation':       { cr = 255; cg =  90; cb =  90; break; }
+        case 'alignment':        { cr =  90; cg = 210; cb =  90; break; }
+        default:                 { cr =  74; cg = 158; cb = 255; break; }
+      }
+      // drawingContext direct — bypass la surcharge p5 (~3× plus rapide par segment)
+      const dc = p.drawingContext;
+      dc.lineCap = 'round';
+      const n = this.trail.length;
+      for (let i = 1; i < n; i++) {
+        const t = i / n;
+        dc.strokeStyle = `rgba(${cr},${cg},${cb},${(t * t * 0.55).toFixed(2)})`;
+        dc.lineWidth = t * 2.2;
+        dc.beginPath();
+        dc.moveTo(this.trail[i-1].x, this.trail[i-1].y);
+        dc.lineTo(this.trail[i].x,   this.trail[i].y);
+        dc.stroke();
+      }
+    }
+
+    draw(params, isSelected) {
+      const col   = this.getColor(params.colors);
+      const angle = this.vel.heading() + p.HALF_PI;
+
+      p.push();
+      p.translate(this.pos.x, this.pos.y);
+      p.rotate(angle);
+
+      if (isSelected) {
+        p.fill(255, 230, 60, 245);
+        p.stroke(255, 230, 60, 100); p.strokeWeight(1);
+      } else {
+        p.fill(col); p.noStroke();
+      }
+
+      // Silhouette d'oiseau en vol
+      p.beginShape();
+      p.vertex(0,    -9);    // tête/bec
+      p.vertex(2.5,  -2);    // épaule droite
+      p.vertex(11,   -5);    // bout aile droite
+      p.vertex(4.5,   3);    // aile droite repliée
+      p.vertex(2,     7);    // queue droite
+      p.vertex(0,     5.5);  // centre queue
+      p.vertex(-2,    7);    // queue gauche
+      p.vertex(-4.5,  3);    // aile gauche repliée
+      p.vertex(-11,  -5);    // bout aile gauche
+      p.vertex(-2.5, -2);    // épaule gauche
+      p.endShape(p.CLOSE);
+
+      // Reflet léger sur le corps
+      if (!isSelected) {
+        p.fill(p.red(col)+40, p.green(col)+40, p.blue(col)+40, 60);
+        p.noStroke();
+        p.ellipse(0, -3, 3, 5);
+      }
+
+      p.pop();
+
+      if (params.vectors) {
+        const tip = p5.Vector.add(this.pos, p5.Vector.mult(this.vel, 10));
+        p.stroke(255, 230, 60, 140); p.strokeWeight(1);
+        p.line(this.pos.x, this.pos.y, tip.x, tip.y);
+      }
+    }
+
+    drawZones(params) {
+      p.push(); p.noFill(); p.strokeWeight(1);
+      if (params.sepOn) {
+        p.stroke(255, 90, 90, 110);
+        p.circle(this.pos.x, this.pos.y, params.sepR * 2);
+        p.fill(255, 90, 90, 7); p.noStroke();
+        p.circle(this.pos.x, this.pos.y, params.sepR * 2);
+      }
+      if (params.aliOn) {
+        p.noFill(); p.stroke(90, 210, 90, 90);
+        p.circle(this.pos.x, this.pos.y, params.aliR * 2);
+        p.fill(90, 210, 90, 5); p.noStroke();
+        p.circle(this.pos.x, this.pos.y, params.aliR * 2);
+      }
+      if (params.cohOn) {
+        p.noFill(); p.stroke(74, 158, 255, 70);
+        p.circle(this.pos.x, this.pos.y, params.cohR * 2);
+        p.fill(74, 158, 255, 4); p.noStroke();
+        p.circle(this.pos.x, this.pos.y, params.cohR * 2);
+      }
+      p.pop();
+    }
+
+    infoText() {
+      const labels = {
+        separation: '<span style="color:#ff7a7a">Séparation</span> — éviter la collision',
+        alignment:  '<span style="color:#7ad27a">Alignement</span> — copier la direction',
+        cohesion:   '<span style="color:#5a9eff">Cohésion</span> — rejoindre le groupe',
+      };
+      const spd = this.vel.mag().toFixed(2);
+      const dir = ((p.degrees(this.vel.heading()) + 360) % 360).toFixed(0);
+      return `<strong>Règle dominante :</strong><br>${labels[this.rule]}<br><br>
+              <strong>Vitesse :</strong> ${spd} &nbsp; <strong>Direction :</strong> ${dir}°<br><br>
+              <em style="color:#555577">Les cercles colorés montrent ses trois rayons de perception.</em>`;
+    }
+  }
+
+  // ── Setup ───────────────────────────────────────────────────
+  p.setup = () => {
+    const wrap = document.getElementById('canvas-wrap');
+    const cnv  = p.createCanvas(wrap.offsetWidth, wrap.offsetHeight);
+    cnv.parent('canvas-wrap');
+    generateStars();
+    const params = pr();
+    for (let i = 0; i < params.count; i++) {
+      boids.push(new Boid(p.random(p.width), p.random(p.height)));
+    }
+    setupUI();
+  };
+
+  // ── Draw ────────────────────────────────────────────────────
+  p.draw = () => {
+    const params = pr();
+
+    // 1. Fond (espace écran)
+    if (params.sky) {
+      drawSky();
+    } else {
+      drawSolid(params.trails);
+    }
+
+    // 2. Caméra follow
+    if (followMode && selected && boids.includes(selected)) {
+      const tz = 3.5;
+      cam.zoom += (tz - cam.zoom) * 0.07;
+      cam.x += (p.width  / 2 - selected.pos.x * cam.zoom - cam.x) * 0.07;
+      cam.y += (p.height / 2 - selected.pos.y * cam.zoom - cam.y) * 0.07;
+    }
+
+    // 3. Monde (coordonnées monde)
+    p.push();
+    p.translate(cam.x, cam.y);
+    p.scale(cam.zoom);
+
+    drawObstacles(params);
+
+    while (boids.length < params.count) boids.push(new Boid(p.random(p.width), p.random(p.height)));
+    while (boids.length > params.count) boids.pop();
+
+    const predWV = predMode ? worldMouse() : null;
+    let flockCenter = null;
+    if (predMode && boids.length > 0) {
+      flockCenter = p.createVector();
+      for (const b of boids) flockCenter.add(b.pos);
+      flockCenter.div(boids.length);
+    }
+
+    // Prédateur
+    if (predMode && p.mouseX >= 0 && p.mouseX <= p.width) {
+      p.noFill();
+      p.stroke(255, 80, 80, 55); p.strokeWeight(1);
+      p.circle(predWV.x, predWV.y, 320);
+      p.stroke(255, 80, 80, 30);
+      p.circle(predWV.x, predWV.y, 160);
+      p.fill(255, 80, 80, 200); p.noStroke();
+      p.textSize(22 / cam.zoom);
+      p.textAlign(p.CENTER, p.CENTER);
+      p.text('🦅', predWV.x, predWV.y - 14 / cam.zoom);
+    }
+
+    // Physique — grille reconstruite en O(n) avant les forces
+    const maxR = Math.max(params.sepOn ? params.sepR : 0, params.aliOn ? params.aliR : 0, params.cohOn ? params.cohR : 0);
+    grid.cellSize = Math.max(maxR, 40);
+    grid.clear();
+    for (const b of boids) grid.insert(b);
+
+    for (const b of boids) b.flock(grid, params, predWV, flockCenter);
+    for (const b of boids) b.update(params);
+
+    // Adapte le framerate : 60 fps ≤ 300 agents, 30 fps au-delà
+    p.frameRate(boids.length > 300 ? 30 : 60);
+
+    // Traînées (derrière les agents)
+    if (params.trails) {
+      for (const b of boids) b.drawTrail(params);
+    }
+
+    // Zones sélection
+    if (selected && boids.includes(selected)) selected.drawZones(params);
+
+    // Agents
+    for (const b of boids) b.draw(params, b === selected);
+
+    p.pop();
+
+    // 4. HUD
+    // Polarisation
+    phi += (calcPolarization() - phi) * 0.06;
+    drawPolarizationGauge(phi);
+    drawHUD(params);
+
+    // Mise à jour panel
+    updatePanelPhi(phi);
+
+    // FPS
+    fpsFrames++;
+    const now = p.millis();
+    if (now - fpsLast > 600) {
+      lastFps = Math.round(fpsFrames / ((now - fpsLast) / 1000));
+      fpsFrames = 0; fpsLast = now;
+      g('counter').textContent = `${boids.length} agents · ${lastFps} fps`;
+    }
+    updateStatus(params);
+  };
+
+  // ── Gauge polarisation (canvas HUD) ─────────────────────────
+  function drawPolarizationGauge(phi) {
+    const cx = 56, cy = p.height - 52, r = 30;
+
+    // Fond de l'arc
+    p.noFill();
+    p.stroke(255, 255, 255, 10); p.strokeWeight(6);
+    p.arc(cx, cy, r*2, r*2, p.PI, p.TWO_PI, p.OPEN);
+
+    // Arc coloré
+    const pr = phi < 0.5 ? 255 : Math.round(p.map(phi, 0.5, 1, 255, 55));
+    const pg = phi > 0.3 ? Math.round(p.map(phi, 0.3, 1, 100, 220)) : Math.round(phi * 330);
+    p.stroke(pr, pg, 50, 200); p.strokeWeight(6);
+    if (phi > 0.01) p.arc(cx, cy, r*2, r*2, p.PI, p.PI + phi * p.PI, p.OPEN);
+
+    // Aiguille
+    const needleA = p.PI + phi * p.PI;
+    p.stroke(255, 255, 255, 120); p.strokeWeight(1.5);
+    p.line(cx, cy, cx + Math.cos(needleA) * (r - 4), cy + Math.sin(needleA) * (r - 4));
+
+    // Valeur
+    p.fill(255, 255, 255, 90); p.noStroke();
+    p.textAlign(p.CENTER, p.TOP);
+    p.textSize(12);
+    p.text(phi.toFixed(2), cx, cy + 5);
+    p.textSize(8);
+    p.fill(255, 255, 255, 38);
+    p.text('polarisation', cx, cy + 19);
+
+    // Bornes 0 / 1
+    p.textSize(8); p.fill(255, 255, 255, 25);
+    p.textAlign(p.RIGHT, p.CENTER); p.text('0', cx - r - 5, cy);
+    p.textAlign(p.LEFT,  p.CENTER); p.text('1', cx + r + 5, cy);
+  }
+
+  // ── Mise à jour barre panel ─────────────────────────────────
+  function updatePanelPhi(phi) {
+    g('phi-val').textContent  = phi.toFixed(2);
+    g('phi-bar').style.width  = (phi * 100) + '%';
+    const pr = phi < 0.5 ? 255 : Math.round(255 - (phi - 0.5) * 390);
+    const pg = phi > 0.3 ? Math.round(p.map(phi, 0.3, 1, 80, 220)) : Math.round(phi * 267);
+    g('phi-bar').style.background = `rgb(${pr},${pg},40)`;
+  }
+
+  // ── Obstacles ───────────────────────────────────────────────
+  function drawObstacles(params) {
+    for (const obs of obstacles) {
+      p.noStroke(); p.fill(30, 20, 60, 50);
+      p.circle(obs.x, obs.y, (obs.r + 10) * 2);
+      p.fill(20, 18, 40);
+      p.stroke(70, 60, 100, 180); p.strokeWeight(1.5);
+      p.circle(obs.x, obs.y, obs.r * 2);
+      p.noStroke(); p.fill(60, 50, 90, 70);
+      p.circle(obs.x - obs.r * 0.22, obs.y - obs.r * 0.22, obs.r * 0.9);
+    }
+    if (obsMode && p.mouseX >= 0 && p.mouseX <= p.width && p.mouseY >= 0 && p.mouseY <= p.height) {
+      const wm = worldMouse();
+      p.noFill(); p.stroke(160, 120, 255, 160); p.strokeWeight(1.5);
+      p.drawingContext.setLineDash([5, 5]);
+      p.circle(wm.x, wm.y, params.obsR * 2);
+      p.drawingContext.setLineDash([]);
+    }
+  }
+
+  // ── HUD général ─────────────────────────────────────────────
+  function drawHUD(params) {
+    if (Math.abs(cam.zoom - 1) > 0.05) {
+      p.fill(255, 255, 255, 55); p.noStroke();
+      p.textSize(11); p.textAlign(p.RIGHT, p.BOTTOM);
+      p.text(`×${cam.zoom.toFixed(1)}`, p.width - 14, p.height - 14);
+    }
+    if (followMode && selected && boids.includes(selected)) {
+      p.fill(255, 230, 60, 110); p.noStroke();
+      p.textSize(11); p.textAlign(p.LEFT, p.BOTTOM);
+      p.text('📍 Mode focus actif', 14, p.height - 14);
+    }
+    // En mode cinéma : hint panneau (coin haut-droit) + fps (bas centre)
+    if (cinemaMode) {
+      p.push();
+      p.noStroke();
+      p.fill(255, 255, 255, 110);
+      p.textSize(12); p.textAlign(p.RIGHT, p.TOP);
+      p.text('[ C ]  panneau', p.width - 18, 18);
+      p.fill(255, 255, 255, 65);
+      p.textSize(11); p.textAlign(p.CENTER, p.BOTTOM);
+      p.text(`${lastFps} fps`, p.width / 2, p.height - 12);
+      p.pop();
+    }
+  }
+
+  // ── Cinema toggle ───────────────────────────────────────────
+  function toggleCinema() {
+    cinemaMode = !cinemaMode;
+    document.body.classList.toggle('cinema', cinemaMode);
+    g('btn-cinema').classList.toggle('active-gold', cinemaMode);
+    g('btn-cinema').innerHTML = cinemaMode
+      ? '🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span>'
+      : '🎬 Mode cinéma <span style="color:#555577;font-size:0.72rem">[C]</span>';
+    setTimeout(() => {
+      const wrap = document.getElementById('canvas-wrap');
+      p.resizeCanvas(wrap.offsetWidth, wrap.offsetHeight);
+      if (pr().sky) generateStars();
+    }, 420);
+  }
+
+  // ── Molette ─────────────────────────────────────────────────
+  p.mouseWheel = (event) => {
+    if (p.mouseX < 0 || p.mouseX > p.width) return;
+    if (followMode) return false;
+    const factor  = event.delta < 0 ? 1.12 : 1 / 1.12;
+    const newZoom = p.constrain(cam.zoom * factor, 0.15, 6);
+    const r = newZoom / cam.zoom;
+    cam.x = p.mouseX - (p.mouseX - cam.x) * r;
+    cam.y = p.mouseY - (p.mouseY - cam.y) * r;
+    cam.zoom = newZoom;
+    return false;
+  };
+
+  // ── Double-clic ─────────────────────────────────────────────
+  p.doubleClicked = () => {
+    if (p.mouseX < 0 || p.mouseX > p.width) return;
+    cam.x = 0; cam.y = 0; cam.zoom = 1;
+    if (followMode) { g('tog-follow').checked = false; followMode = false; }
+  };
+
+  // ── Clic gauche ─────────────────────────────────────────────
+  p.mousePressed = () => {
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+    if (p.mouseButton !== p.LEFT) return;
+    const wm = worldMouse();
+    if (obsMode) { obstacles.push({ x: wm.x, y: wm.y, r: pr().obsR }); return; }
+    let closest = null, minD = Infinity;
+    for (const b of boids) {
+      const d = p5.Vector.dist(b.pos, wm);
+      if (d < minD) { minD = d; closest = b; }
+    }
+    if (minD < 35 / cam.zoom) {
+      selected = (selected === closest) ? null : closest;
+      if (!selected && followMode) { g('tog-follow').checked = false; followMode = false; }
+    } else {
+      selected = null;
+      if (followMode) { g('tog-follow').checked = false; followMode = false; }
+    }
+    updateSelectedInfo();
+  };
+
+  // ── Clic droit (supprimer obstacle) ─────────────────────────
+  document.getElementById('canvas-wrap').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (!obsMode || obstacles.length === 0) return;
+    const rect = e.target.getBoundingClientRect();
+    const wx = (e.clientX - rect.left - cam.x) / cam.zoom;
+    const wy = (e.clientY - rect.top  - cam.y) / cam.zoom;
+    let minD = Infinity, minI = -1;
+    obstacles.forEach((obs, i) => {
+      const d = Math.hypot(obs.x - wx, obs.y - wy);
+      if (d < minD) { minD = d; minI = i; }
+    });
+    if (minI >= 0 && minD < obstacles[minI].r + 20) obstacles.splice(minI, 1);
+  });
+
+  // ── Clavier ─────────────────────────────────────────────────
+  p.keyPressed = () => {
+    if (p.key === 'c' || p.key === 'C') toggleCinema();
+    if (p.keyCode === p.ESCAPE && cinemaMode) toggleCinema();
+  };
+
+  p.windowResized = () => {
+    const wrap = document.getElementById('canvas-wrap');
+    p.resizeCanvas(wrap.offsetWidth, wrap.offsetHeight);
+    if (pr().sky) generateStars();
+  };
+
+  // ── Status ──────────────────────────────────────────────────
+  function updateStatus(params) {
+    const off = [];
+    if (!params.sepOn) off.push('séparation');
+    if (!params.aliOn) off.push('alignement');
+    if (!params.cohOn) off.push('cohésion');
+    let txt = '';
+    if (off.length === 3) {
+      txt = 'Toutes les règles désactivées — les agents dérivent librement, aucune interaction.';
+    } else if (!params.sepOn && !params.aliOn && params.cohOn) {
+      txt = 'Cohésion pure — sans séparation, les agents s\'effondrent vers un seul point.';
+    } else if (params.sepOn && !params.aliOn && !params.cohOn) {
+      txt = 'Séparation seule — les agents se repoussent sans se regrouper. Dispersion totale.';
+    } else if (!params.sepOn && params.aliOn && !params.cohOn) {
+      txt = 'Alignement seul — les agents synchronisent leurs directions mais dérivent sans groupe.';
+    } else if (off.length > 0) {
+      txt = `Règle${off.length>1?'s':''} désactivée${off.length>1?'s':''} : ${off.join(', ')}. Observez l'effet sur la formation.`;
+    } else if (predMode) {
+      txt = '🦅 Prédateur actif — approchez le curseur pour déclencher le vortex défensif (Ian Couzin, 2001).';
+    } else if (obsMode) {
+      txt = '🪨 Mode obstacles — clic gauche pour poser, clic droit pour supprimer.';
+    } else if (followMode && selected) {
+      txt = '📍 Mode focus — la caméra suit l\'agent sélectionné.';
+    } else if (selected) {
+      txt = 'Agent inspecté. Activez "Suivre" pour zoomer dessus.';
+    } else {
+      const order = phi > 0.85 ? 'vol très ordonné' : phi > 0.6 ? 'groupe cohérent' : phi > 0.35 ? 'semi-organisé' : 'mouvement chaotique';
+      txt = `${boids.length} agents — Φ = ${phi.toFixed(2)} (${order}).`;
+    }
+    g('status-box').textContent = txt;
+    if (selected && boids.includes(selected)) {
+      g('selected-box').style.display = 'block';
+      g('selected-content').innerHTML = selected.infoText();
+    }
+  }
+
+  function updateSelectedInfo() {
+    if (!selected) g('selected-box').style.display = 'none';
+  }
+
+  // ── UI setup ────────────────────────────────────────────────
+  function setupUI() {
+    [
+      ['sep-r', 'v-sep-r', v => v],
+      ['sep-w', 'v-sep-w', v => (v/10).toFixed(1)],
+      ['ali-r', 'v-ali-r', v => v],
+      ['ali-w', 'v-ali-w', v => (v/10).toFixed(1)],
+      ['coh-r', 'v-coh-r', v => v],
+      ['coh-w', 'v-coh-w', v => (v/10).toFixed(1)],
+      ['s-count',    'v-count',    v => v],
+      ['s-speed',    'v-speed',    v => (v/5).toFixed(1)],
+      ['obs-r',      'v-obs-r',    v => v],
+      ['s-trail-len','v-trail-len', v => v],
+    ].forEach(([sid, vid, fmt]) => {
+      g(sid).addEventListener('input', () => { g(vid).textContent = fmt(+g(sid).value); });
+    });
+
+    // Toggle traînées → montrer/cacher slider longueur
+    g('tog-trails').addEventListener('change', () => {
+      g('trail-len-row').style.opacity = g('tog-trails').checked ? '1' : '0.35';
+    });
+
+    // Dim règles
+    ['sep','ali','coh'].forEach(r => {
+      g(`tog-${r}`).addEventListener('change', () => {
+        g(`block-${r}`).classList.toggle('off', !g(`tog-${r}`).checked);
+      });
+    });
+
+    // Régénère étoiles quand ciel toggle
+    g('tog-sky').addEventListener('change', () => { if (g('tog-sky').checked) generateStars(); });
+
+    // Mode focus
+    g('tog-follow').addEventListener('change', () => {
+      followMode = g('tog-follow').checked;
+      if (followMode && !selected && boids.length > 0) {
+        selected = boids[Math.floor(boids.length / 2)];
+        g('selected-box').style.display = 'block';
+        g('selected-content').innerHTML = selected.infoText();
+      }
+      if (!followMode) { cam.x = 0; cam.y = 0; cam.zoom = 1; }
+    });
+
+    // Prédateur
+    g('btn-pred').addEventListener('click', () => {
+      predMode = !predMode;
+      g('btn-pred').classList.toggle('active-red', predMode);
+      g('btn-pred').textContent = predMode ? '🦅 Désactiver le prédateur' : '🦅 Activer le prédateur (souris)';
+    });
+
+    // Obstacles
+    g('btn-obs').addEventListener('click', () => {
+      obsMode = !obsMode;
+      g('btn-obs').classList.toggle('active-purple', obsMode);
+      g('btn-obs').textContent = obsMode ? '🪨 Quitter le mode obstacles' : '🪨 Mode placement d\'obstacles';
+      g('obs-controls').style.display = obsMode ? 'block' : 'none';
+      g('obs-hint').style.display     = obsMode ? 'block' : 'none';
+      document.getElementById('canvas-wrap').classList.toggle('obs-cursor', obsMode);
+    });
+    g('btn-clear-obs').addEventListener('click', () => { obstacles = []; });
+
+    // Cinéma — initialiser en mode cinéma (démarrage par défaut)
+    g('btn-cinema').classList.add('active-gold');
+    g('btn-cinema').innerHTML = '🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span>';
+    g('btn-cinema').addEventListener('click', toggleCinema);
+
+    // Disperser
+    g('btn-scatter').addEventListener('click', () => {
+      for (const b of boids) { b.vel = p5.Vector.random2D().mult(p.random(4, 9)); b.acc.set(0,0); b.trail = []; }
+      selected = null; followMode = false;
+      g('tog-follow').checked = false;
+      g('selected-box').style.display = 'none';
+      cam.x = 0; cam.y = 0; cam.zoom = 1;
+    });
+
+    // Reset
+    g('btn-reset').addEventListener('click', () => {
+      boids = []; selected = null; predMode = false; obsMode = false; obstacles = [];
+      followMode = false; cam.x = 0; cam.y = 0; cam.zoom = 1;
+      g('tog-follow').checked = false;
+      g('btn-pred').classList.remove('active-red');
+      g('btn-pred').textContent = '🦅 Activer le prédateur (souris)';
+      g('btn-obs').classList.remove('active-purple');
+      g('btn-obs').textContent = '🪨 Mode placement d\'obstacles';
+      g('obs-controls').style.display = 'none';
+      g('obs-hint').style.display = 'none';
+      g('selected-box').style.display = 'none';
+      document.getElementById('canvas-wrap').classList.remove('obs-cursor');
+      if (cinemaMode) toggleCinema();
+      const params = pr();
+      for (let i = 0; i < params.count; i++) boids.push(new Boid(p.random(p.width), p.random(p.height)));
+    });
+  }
+};
+
+new p5(sim);
+</script>
+</body>
+</html>

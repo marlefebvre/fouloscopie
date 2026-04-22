@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murmuration V2 — Fouloscopie</title>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.2/dist/pixi.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #04030f;
+      color: #e0e0f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── CANVAS ── */
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      cursor: default;
+      transition: flex 0s;
+    }
+    #canvas-wrap.obs-cursor { cursor: crosshair; }
+    #canvas-wrap canvas { display: block; }
+
+    #canvas-hint {
+      position: absolute;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.14);
+      pointer-events: none;
+      white-space: nowrap;
+      transition: opacity 0.4s;
+    }
+
+    #obs-hint {
+      position: absolute;
+      top: 14px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.78rem;
+      color: rgba(200,160,255,0.85);
+      background: rgba(80,40,120,0.5);
+      border: 1px solid rgba(160,100,255,0.3);
+      padding: 6px 14px; border-radius: 20px;
+      pointer-events: none; display: none; white-space: nowrap;
+    }
+
+    /* ── CINEMA ── */
+    #panel {
+      transition: width 0.38s cubic-bezier(0.4,0,0.2,1),
+                  min-width 0.38s cubic-bezier(0.4,0,0.2,1),
+                  border-color 0.38s;
+    }
+    body.cinema #panel { width: 0 !important; min-width: 0 !important; overflow: hidden; border-color: transparent; }
+    body.cinema #canvas-hint { opacity: 0; }
+
+    #cinema-hint { display: none; }
+
+    /* ── PANEL ── */
+    #panel {
+      width: 290px; min-width: 290px;
+      background: rgba(8,8,24,0.97);
+      border-left: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+    }
+    #panel::-webkit-scrollbar { width: 4px; }
+    #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .panel-header {
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    .back-btn {
+      color: #555577; text-decoration: none; font-size: 0.8rem;
+      padding: 4px 9px; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; transition: all 0.2s; white-space: nowrap;
+    }
+    .back-btn:hover { color: #9999bb; border-color: rgba(255,255,255,0.18); }
+    .panel-title { font-size: 0.95rem; font-weight: 600; color: #c0c0e0; }
+    .badge-gpu {
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+      background: rgba(74,158,255,0.15); color: #4a9eff;
+      border: 1px solid rgba(74,158,255,0.3);
+      border-radius: 4px; padding: 1px 5px; margin-left: 4px;
+      vertical-align: middle; white-space: nowrap;
+    }
+
+    .section {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+    .section-label {
+      font-size: 0.65rem; text-transform: uppercase;
+      letter-spacing: 0.18em; color: #444466; font-weight: 700; margin-bottom: 11px;
+    }
+
+    /* ── RULE BLOCKS ── */
+    .rule-block {
+      margin-bottom: 10px; padding: 11px 12px;
+      border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.02);
+      transition: opacity 0.2s, border-color 0.2s;
+    }
+    .rule-block.off { opacity: 0.38; }
+    .rule-block.sep { border-color: rgba(255,90,90,0.15); }
+    .rule-block.ali { border-color: rgba(90,210,90,0.12); }
+    .rule-block.coh { border-color: rgba(74,158,255,0.12); }
+    .rule-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+    .rule-name { display: flex; align-items: center; gap: 7px; font-size: 0.85rem; font-weight: 600; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .rule-desc { font-size: 0.72rem; color: #55557a; line-height: 1.5; margin-bottom: 9px; }
+
+    /* ── TOGGLE ── */
+    .toggle { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
+    .toggle input { display: none; }
+    .tog {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 18px; cursor: pointer; transition: background 0.2s;
+    }
+    .tog::after {
+      content: ''; position: absolute;
+      width: 12px; height: 12px; background: #fff;
+      border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s;
+    }
+    .toggle input:checked + .tog { background: #4a9eff; }
+    .toggle input:checked + .tog::after { left: 19px; }
+    .sep .toggle input:checked + .tog { background: #ff5a5a; }
+    .ali .toggle input:checked + .tog { background: #5ad25a; }
+    .coh .toggle input:checked + .tog { background: #4a9eff; }
+
+    /* ── SLIDERS ── */
+    .slider-row { margin-bottom: 7px; }
+    .slider-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+    .slider-name { font-size: 0.72rem; color: #7777aa; }
+    .slider-val  { font-size: 0.72rem; color: #9999cc; font-weight: 600; min-width: 28px; text-align: right; }
+    input[type=range] {
+      width: 100%; height: 3px;
+      -webkit-appearance: none; appearance: none;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px; height: 13px;
+      border-radius: 50%; background: #4a9eff;
+      cursor: pointer; transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+    .sep input[type=range]::-webkit-slider-thumb { background: #ff5a5a; }
+    .ali input[type=range]::-webkit-slider-thumb { background: #5ad25a; }
+    .coh input[type=range]::-webkit-slider-thumb { background: #4a9eff; }
+
+    /* ── CONTROLS ── */
+    .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .ctrl-label { font-size: 0.8rem; color: #8888aa; }
+    .ctrl-hint  { font-size: 0.7rem; color: #444466; line-height: 1.5; margin-top: -4px; margin-bottom: 8px; }
+
+    /* ── LÉGENDE ── */
+    .legend { display: flex; flex-direction: column; gap: 5px; margin-top: 2px; }
+    .legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: #7777aa; }
+
+    /* ── BOUTONS ── */
+    .btn {
+      width: 100%; padding: 8px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #a0a0c0; border-radius: 8px; cursor: pointer;
+      font-size: 0.82rem; text-align: left;
+      transition: all 0.2s; margin-bottom: 6px; font-family: inherit;
+    }
+    .btn:hover { background: rgba(255,255,255,0.1); color: #c0c0e0; }
+    .btn.active-red    { background: rgba(255,80,80,0.12);   border-color: rgba(255,80,80,0.3);   color: #ff7777; }
+    .btn.active-purple { background: rgba(160,80,255,0.12);  border-color: rgba(160,80,255,0.3);  color: #cc88ff; }
+    .btn.active-gold   { background: rgba(255,200,50,0.12);  border-color: rgba(255,200,50,0.3);  color: #ffd050; }
+
+    /* ── BUTTON GROUP (zone / scale) ── */
+    .btn-group { display: flex; gap: 4px; margin-bottom: 8px; }
+    .bg-btn {
+      flex: 1; padding: 6px 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #6666aa; border-radius: 7px; cursor: pointer;
+      font-size: 0.75rem; text-align: center;
+      transition: all 0.18s; font-family: inherit;
+    }
+    .bg-btn:hover { background: rgba(255,255,255,0.09); color: #9999cc; }
+    .bg-btn.active {
+      background: rgba(74,158,255,0.18);
+      border-color: rgba(74,158,255,0.4);
+      color: #4a9eff; font-weight: 600;
+    }
+
+    /* ── INFO PANEL ── */
+    #info-section { padding: 14px 18px; flex: 1; }
+    #status-box {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 11px 12px;
+      font-size: 0.78rem; color: #7777aa; line-height: 1.65; min-height: 70px;
+    }
+    #selected-box {
+      display: none; margin-top: 10px;
+      background: rgba(74,158,255,0.06);
+      border: 1px solid rgba(74,158,255,0.18);
+      border-radius: 10px; padding: 11px 12px;
+    }
+    #selected-box .sel-title {
+      font-size: 0.7rem; font-weight: 700;
+      color: #4a9eff; letter-spacing: 0.1em;
+      text-transform: uppercase; margin-bottom: 7px;
+    }
+    #selected-content { font-size: 0.77rem; color: #8888bb; line-height: 1.65; }
+    #selected-content strong { color: #aaaadd; }
+
+    /* ── POLARISATION PANEL BAR ── */
+    #phi-section { margin-top: 12px; }
+    #phi-bar-wrap {
+      height: 4px; background: rgba(255,255,255,0.07);
+      border-radius: 2px; overflow: hidden; flex: 1;
+    }
+    #phi-bar { height: 100%; width: 0%; border-radius: 2px; transition: width 0.4s, background 0.4s; }
+
+    /* ── COUNTER ── */
+    #counter {
+      font-size: 0.68rem; color: #333355;
+      padding: 8px 18px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body class="cinema">
+
+<div id="canvas-wrap">
+  <div id="canvas-hint">Clic = inspecter · Molette = zoom · Double-clic = réinitialiser · <kbd style="font-family:inherit">C</kbd> = cinéma</div>
+  <div id="obs-hint">🪨 Mode obstacles actif — Clic gauche : ajouter · Clic droit : supprimer</div>
+</div>
+
+<div id="cinema-hint">Appuyez sur C pour quitter le mode cinéma</div>
+
+<aside id="panel">
+  <div class="panel-header">
+    <a href="index.html" class="back-btn">← Accueil</a>
+    <span class="panel-title">🐦 Murmuration <span class="badge-gpu">V2 · GPU</span></span>
+  </div>
+
+  <!-- RÈGLES -->
+  <div class="section">
+    <div class="section-label">Règles de Reynolds</div>
+
+    <div class="rule-block sep" id="block-sep">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#ff5a5a"></div>Séparation</div>
+        <label class="toggle"><input type="checkbox" id="tog-sep" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent s'éloigne de ses voisins trop proches pour éviter la collision.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-sep-r">30</span></div>
+        <input type="range" id="sep-r" min="5" max="120" value="30">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-sep-w">1.5</span></div>
+        <input type="range" id="sep-w" min="0" max="50" value="15">
+      </div>
+    </div>
+
+    <div class="rule-block ali" id="block-ali">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#5ad25a"></div>Alignement</div>
+        <label class="toggle"><input type="checkbox" id="tog-ali" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent copie la direction et la vitesse de ses voisins proches.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-ali-r">60</span></div>
+        <input type="range" id="ali-r" min="10" max="200" value="60">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-ali-w">1.0</span></div>
+        <input type="range" id="ali-w" min="0" max="50" value="10">
+      </div>
+    </div>
+
+    <div class="rule-block coh" id="block-coh">
+      <div class="rule-head">
+        <div class="rule-name"><div class="dot" style="background:#4a9eff"></div>Cohésion</div>
+        <label class="toggle"><input type="checkbox" id="tog-coh" checked><div class="tog"></div></label>
+      </div>
+      <div class="rule-desc">Chaque agent se dirige vers le centre de masse de son groupe local.</div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Rayon de perception</span><span class="slider-val" id="v-coh-r">100</span></div>
+        <input type="range" id="coh-r" min="10" max="300" value="100">
+      </div>
+      <div class="slider-row">
+        <div class="slider-meta"><span class="slider-name">Intensité</span><span class="slider-val" id="v-coh-w">1.0</span></div>
+        <input type="range" id="coh-w" min="0" max="50" value="10">
+      </div>
+    </div>
+  </div>
+
+  <!-- SIMULATION -->
+  <div class="section">
+    <div class="section-label">Simulation</div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Nombre d'agents</span><span class="slider-val" id="v-count">2000</span></div>
+      <input type="range" id="s-count" min="5" max="3000" value="2000">
+    </div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Vitesse maximale</span><span class="slider-val" id="v-speed">3.0</span></div>
+      <input type="range" id="s-speed" min="5" max="30" value="15">
+    </div>
+  </div>
+
+  <!-- ZONE & OISEAUX -->
+  <div class="section">
+    <div class="section-label">Zone &amp; Oiseaux</div>
+    <div class="ctrl-label" style="font-size:0.72rem;color:#7777aa;margin-bottom:5px;">Taille de zone</div>
+    <div class="btn-group" id="zone-btns">
+      <button class="bg-btn" data-factor="1">×1</button>
+      <button class="bg-btn" data-factor="2">×2</button>
+      <button class="bg-btn active" data-factor="3">×3</button>
+      <button class="bg-btn" data-factor="4">×4</button>
+    </div>
+    <div class="ctrl-label" style="font-size:0.72rem;color:#7777aa;margin-bottom:5px;">Taille des oiseaux</div>
+    <div class="btn-group" id="scale-btns">
+      <button class="bg-btn active" data-divisor="1">÷1</button>
+      <button class="bg-btn" data-divisor="2">÷2</button>
+      <button class="bg-btn" data-divisor="3">÷3</button>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Murs sur les bords</span>
+      <label class="toggle"><input type="checkbox" id="tog-walls" checked><div class="tog"></div></label>
+    </div>
+  </div>
+
+  <!-- CAMÉRA -->
+  <div class="section">
+    <div class="section-label">Caméra</div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Suivre l'agent sélectionné</span>
+      <label class="toggle"><input type="checkbox" id="tog-follow"><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-hint">Molette = zoom · Double-clic = vue d'ensemble</div>
+  </div>
+
+  <!-- VISUALISATION -->
+  <div class="section">
+    <div class="section-label">Visualisation</div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">🌅 Ciel crépusculaire</span>
+      <label class="toggle"><input type="checkbox" id="tog-sky" checked><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">🌠 Traînées lumineuses</span>
+      <label class="toggle"><input type="checkbox" id="tog-trails"><div class="tog"></div></label>
+    </div>
+    <div class="slider-row" id="trail-len-row">
+      <div class="slider-meta"><span class="slider-name">Longueur des traînées</span><span class="slider-val" id="v-trail-len">35</span></div>
+      <input type="range" id="s-trail-len" min="8" max="70" value="35">
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Vecteurs de vitesse</span>
+      <label class="toggle"><input type="checkbox" id="tog-vec"><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Couleur par règle dominante</span>
+      <label class="toggle"><input type="checkbox" id="tog-col"><div class="tog"></div></label>
+    </div>
+    <div class="section-label" style="margin-top:10px;">Légende</div>
+    <div class="legend">
+      <div class="legend-item"><div class="dot" style="background:#ff5a5a"></div>Séparation dominante</div>
+      <div class="legend-item"><div class="dot" style="background:#5ad25a"></div>Alignement dominant</div>
+      <div class="legend-item"><div class="dot" style="background:#4a9eff"></div>Cohésion dominante</div>
+    </div>
+
+    <!-- POLARISATION -->
+    <div id="phi-section">
+      <div class="section-label" style="margin-top:14px;">Polarisation Φ (Vicsek)</div>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+        <div id="phi-bar-wrap"><div id="phi-bar"></div></div>
+        <div id="phi-val" style="font-size:0.75rem;color:#9999cc;font-weight:600;min-width:32px;text-align:right">0.00</div>
+      </div>
+      <div style="font-size:0.68rem;color:#444466;line-height:1.5">0 = désordre total · 1 = vol parfaitement aligné</div>
+    </div>
+  </div>
+
+  <!-- INTERACTIONS -->
+  <div class="section">
+    <div class="section-label">Interactions</div>
+    <button class="btn" id="btn-pred">🦅 Activer le prédateur (souris)</button>
+    <button class="btn" id="btn-obs">🪨 Mode placement d'obstacles</button>
+    <div id="obs-controls" style="display:none">
+      <div class="slider-row" style="margin-top:2px;">
+        <div class="slider-meta"><span class="slider-name">Taille de l'obstacle</span><span class="slider-val" id="v-obs-r">40</span></div>
+        <input type="range" id="obs-r" min="10" max="120" value="40">
+      </div>
+      <button class="btn" id="btn-clear-obs" style="margin-top:2px">✕ Effacer tous les obstacles</button>
+    </div>
+    <button class="btn active-gold" id="btn-cinema">🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span></button>
+    <button class="btn" id="btn-scatter">💥 Disperser le groupe</button>
+    <button class="btn" id="btn-reset">↺ Réinitialiser</button>
+  </div>
+
+  <!-- INFO -->
+  <div id="info-section">
+    <div class="section-label">Ce qui se passe</div>
+    <div id="status-box">Simulation en cours. Cliquez sur un agent pour l'inspecter et visualiser ses zones de perception.</div>
+    <div id="selected-box">
+      <div class="sel-title">Agent inspecté</div>
+      <div id="selected-content"></div>
+    </div>
+  </div>
+
+  <div id="counter">— agents · — fps</div>
+</aside>
+
+<script>
+// ================================================================
+// FOULOSCOPIE — Murmuration V2 — PIXI.js GPU Edition
+// Reynolds (1986) · Vortex Couzin (2001) · Polarisation Vicsek
+// ================================================================
+
+// ── SoA physique ─────────────────────────────────────────────────
+const MAX_N = 3000;
+const posX = new Float32Array(MAX_N);
+const posY = new Float32Array(MAX_N);
+const velX = new Float32Array(MAX_N);
+const velY = new Float32Array(MAX_N);
+const accX = new Float32Array(MAX_N);
+const accY = new Float32Array(MAX_N);
+const domRule = new Uint8Array(MAX_N); // 0=sep 1=ali 2=coh
+const trails  = Array.from({ length: MAX_N }, () => []);
+let N = 0;
+
+// ── État global ──────────────────────────────────────────────────
+let selected   = -1;   // index boid, -1 = aucun
+let predMode   = false;
+let obsMode    = false;
+let obstacles  = [];
+let followMode = false;
+let cinemaMode = true;
+let vortexDir  = Math.random() > 0.5 ? 1 : -1;
+let phi        = 0;
+let frameCount = 0;
+let fpsFrames  = 0, fpsLast = 0, lastFps = 60;
+
+let cam = { x: 0, y: 0, zoom: 1 / 3 };
+let mouseScreenX = 0, mouseScreenY = 0;
+
+// ── Grille spatiale (stocke des indices) ─────────────────────────
+const grid = {
+  cells: new Map(), cs: 100,
+  _k(cx, cy) { return (cx & 0x3FFF) | ((cy & 0x3FFF) << 14); },
+  clear() { this.cells.clear(); },
+  insert(i) {
+    const k = this._k(Math.floor(posX[i] / this.cs), Math.floor(posY[i] / this.cs));
+    let c = this.cells.get(k);
+    if (!c) { c = []; this.cells.set(k, c); }
+    c.push(i);
+  }
+};
+
+// ── Helpers ──────────────────────────────────────────────────────
+const g = id => document.getElementById(id);
+
+function pr() {
+  return {
+    sepOn   : g('tog-sep').checked,
+    aliOn   : g('tog-ali').checked,
+    cohOn   : g('tog-coh').checked,
+    sepR    : +g('sep-r').value,
+    aliR    : +g('ali-r').value,
+    cohR    : +g('coh-r').value,
+    sepW    : +g('sep-w').value / 10,
+    aliW    : +g('ali-w').value / 10,
+    cohW    : +g('coh-w').value / 10,
+    count   : +g('s-count').value,
+    speed   : +g('s-speed').value / 5,
+    obsR    : +g('obs-r').value,
+    sky     : g('tog-sky').checked,
+    trails  : g('tog-trails').checked,
+    trailLen: +g('s-trail-len').value,
+    vectors : g('tog-vec').checked,
+    colors  : g('tog-col').checked,
+  };
+}
+
+function screenToWorld(sx, sy) {
+  return [(sx - cam.x) / cam.zoom, (sy - cam.y) / cam.zoom];
+}
+
+// ── Zone & Scale helpers ─────────────────────────────────────────
+function setWorldFactor(f) {
+  worldFactor = f;
+  worldW = W * f; worldH = H * f;
+  cam.zoom = 1 / f; cam.x = 0; cam.y = 0;
+  document.querySelectorAll('#zone-btns .bg-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.factor === f)
+  );
+}
+
+function setBirdScale(divisor) {
+  birdScaleDivisor = divisor;
+  for (let i = 0; i < MAX_N; i++) sprites[i].scale.set(1 / divisor);
+  document.querySelectorAll('#scale-btns .bg-btn').forEach(b =>
+    b.classList.toggle('active', +b.dataset.divisor === divisor)
+  );
+}
+
+// ── Init boid ────────────────────────────────────────────────────
+function initBoid(i, W, H) {
+  posX[i] = Math.random() * W;
+  posY[i] = Math.random() * H;
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 1.5 + Math.random() * 1.5;
+  velX[i] = Math.cos(angle) * speed;
+  velY[i] = Math.sin(angle) * speed;
+  accX[i] = 0; accY[i] = 0;
+  domRule[i] = 2;
+  trails[i].length = 0;
+}
+
+// ── Physics ──────────────────────────────────────────────────────
+function steer(mx, my, speed, w, maxF) {
+  const m = Math.sqrt(mx * mx + my * my);
+  if (m < 0.0001) return [0, 0];
+  let sx = mx / m * speed - 0, sy = my / m * speed - 0;
+  // (caller applies vel subtraction separately)
+  return [sx * w, sy * w];
+}
+
+function stepPhysics(params, predWX, predWY, predActive, flockCX, flockCY, W, H) {
+  const sepR2 = params.sepR * params.sepR;
+  const aliR2 = params.aliR * params.aliR;
+  const cohR2 = params.cohR * params.cohR;
+  const speed  = params.speed;
+  const f      = 0.09;
+  const cs     = grid.cs;
+
+  for (let i = 0; i < N; i++) {
+    const px = posX[i], py = posY[i];
+    const vx = velX[i], vy = velY[i];
+
+    let sepX = 0, sepY = 0, sepCnt = 0;
+    let aliX = 0, aliY = 0, aliCnt = 0;
+    let cohX = 0, cohY = 0, cohCnt = 0;
+
+    const maxR = Math.max(
+      params.sepOn ? params.sepR : 0,
+      params.aliOn ? params.aliR : 0,
+      params.cohOn ? params.cohR : 0
+    );
+    const x0 = Math.floor((px - maxR) / cs), x1 = Math.floor((px + maxR) / cs);
+    const y0 = Math.floor((py - maxR) / cs), y1 = Math.floor((py + maxR) / cs);
+
+    for (let cx = x0; cx <= x1; cx++) {
+      for (let cy = y0; cy <= y1; cy++) {
+        const cell = grid.cells.get(grid._k(cx, cy));
+        if (!cell) continue;
+        for (let ci = 0; ci < cell.length; ci++) {
+          const j = cell[ci];
+          if (j === i) continue;
+          const dx = posX[j] - px, dy = posY[j] - py;
+          const d2 = dx * dx + dy * dy;
+          if (params.sepOn && d2 > 0.01 && d2 < sepR2) {
+            sepX -= dx / d2; sepY -= dy / d2; sepCnt++;
+          }
+          if (params.aliOn && d2 < aliR2) {
+            aliX += velX[j]; aliY += velY[j]; aliCnt++;
+          }
+          if (params.cohOn && d2 < cohR2) {
+            cohX += posX[j]; cohY += posY[j]; cohCnt++;
+          }
+        }
+      }
+    }
+
+    // Steering forces
+    let sepFx = 0, sepFy = 0;
+    if (sepCnt > 0) {
+      const mx = sepX / sepCnt, my = sepY / sepCnt;
+      const m = Math.sqrt(mx * mx + my * my);
+      if (m > 0.0001) {
+        let sx = mx / m * speed - vx, sy = my / m * speed - vy;
+        const sl = Math.sqrt(sx * sx + sy * sy);
+        if (sl > f) { const r = f / sl; sx *= r; sy *= r; }
+        sepFx = sx * params.sepW; sepFy = sy * params.sepW;
+      }
+    }
+
+    let aliFx = 0, aliFy = 0;
+    if (aliCnt > 0) {
+      const mx = aliX / aliCnt, my = aliY / aliCnt;
+      const m = Math.sqrt(mx * mx + my * my);
+      if (m > 0.0001) {
+        let sx = mx / m * speed - vx, sy = my / m * speed - vy;
+        const sl = Math.sqrt(sx * sx + sy * sy);
+        if (sl > f) { const r = f / sl; sx *= r; sy *= r; }
+        aliFx = sx * params.aliW; aliFy = sy * params.aliW;
+      }
+    }
+
+    let cohFx = 0, cohFy = 0;
+    if (cohCnt > 0) {
+      const mx = cohX / cohCnt - px, my = cohY / cohCnt - py;
+      const m = Math.sqrt(mx * mx + my * my);
+      if (m > 0.0001) {
+        let sx = mx / m * speed - vx, sy = my / m * speed - vy;
+        const sl = Math.sqrt(sx * sx + sy * sy);
+        const fC = f * 0.6;
+        if (sl > fC) { const r = fC / sl; sx *= r; sy *= r; }
+        cohFx = sx * params.cohW; cohFy = sy * params.cohW;
+      }
+    }
+
+    accX[i] += sepFx + aliFx + cohFx;
+    accY[i] += sepFy + aliFy + cohFy;
+
+    // Dominant rule
+    const sm = sepFx * sepFx + sepFy * sepFy;
+    const am = aliFx * aliFx + aliFy * aliFy;
+    const cm = cohFx * cohFx + cohFy * cohFy;
+    if      (sm > am && sm > cm && sm > 2.5e-7) domRule[i] = 0;
+    else if (am > cm && am > 2.5e-7)            domRule[i] = 1;
+    else if (cm > 2.5e-7)                       domRule[i] = 2;
+
+    // Obstacles
+    for (const obs of obstacles) {
+      const dx = px - obs.x, dy = py - obs.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const buf = obs.r + 40;
+      if (d < buf && d > 0) {
+        let fx = dx / d * speed - vx, fy = dy / d * speed - vy;
+        const fl = Math.sqrt(fx * fx + fy * fy);
+        const maxPush = f * 4;
+        if (fl > maxPush) { const r = maxPush / fl; fx *= r; fy *= r; }
+        const fac = 1 - d / buf;
+        accX[i] += fx * fac; accY[i] += fy * fac;
+      }
+    }
+
+    // Predator flee + Couzin vortex
+    if (predActive) {
+      const dpx = px - predWX, dpy = py - predWY;
+      const d = Math.sqrt(dpx * dpx + dpy * dpy);
+      if (d < 160 && d > 0.01) {
+        const fm = speed / d;
+        let fx = dpx * fm - vx, fy = dpy * fm - vy;
+        const fl = Math.sqrt(fx * fx + fy * fy);
+        const maxF6 = f * 6;
+        if (fl > maxF6) { const r = maxF6 / fl; fx *= r; fy *= r; }
+        accX[i] += fx; accY[i] += fy;
+      }
+      const predDist = Math.sqrt((predWX - flockCX) * (predWX - flockCX) + (predWY - flockCY) * (predWY - flockCY));
+      if (predDist < 280) {
+        const toCX = flockCX - px, toCY = flockCY - py;
+        const tanX = -toCY * vortexDir, tanY = toCX * vortexDir;
+        const tm = Math.sqrt(tanX * tanX + tanY * tanY);
+        if (tm > 0.0001) {
+          const tx = tanX / tm * speed, ty = tanY / tm * speed;
+          let vfx = tx - vx, vfy = ty - vy;
+          const vfl = Math.sqrt(vfx * vfx + vfy * vfy);
+          const maxV = f * 1.8;
+          if (vfl > maxV) { const r = maxV / vfl; vfx *= r; vfy *= r; }
+          const strength = (1 - predDist / 280) * 1.4;
+          accX[i] += vfx * strength; accY[i] += vfy * strength;
+        }
+      }
+    }
+
+    // Wall avoidance — large margin, quadratic falloff, no bounce
+    if (borderWalls) {
+      const margin = Math.min(W, H) * 0.18;
+      const maxF = speed * 0.13;
+      if (px < margin) {
+        const t = 1 - px / margin;
+        accX[i] += maxF * t * t;
+      }
+      if (px > W - margin) {
+        const t = 1 - (W - px) / margin;
+        accX[i] -= maxF * t * t;
+      }
+      if (py < margin) {
+        const t = 1 - py / margin;
+        accY[i] += maxF * t * t;
+      }
+      if (py > H - margin) {
+        const t = 1 - (H - py) / margin;
+        accY[i] -= maxF * t * t;
+      }
+    }
+  }
+
+  // Integrate
+  for (let i = 0; i < N; i++) {
+    velX[i] += accX[i]; velY[i] += accY[i];
+    const vm = Math.sqrt(velX[i] * velX[i] + velY[i] * velY[i]);
+    if (vm > params.speed) { const r = params.speed / vm; velX[i] *= r; velY[i] *= r; }
+    posX[i] += velX[i]; posY[i] += velY[i];
+    accX[i] = 0; accY[i] = 0;
+
+    // Obstacle ejection
+    for (const obs of obstacles) {
+      const dx = posX[i] - obs.x, dy = posY[i] - obs.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < obs.r + 4 && d > 0) {
+        const push = obs.r + 5;
+        posX[i] = obs.x + dx / d * push;
+        posY[i] = obs.y + dy / d * push;
+      }
+    }
+
+    // Wrap / Bounce
+    if (!borderWalls) {
+      const pad = 12;
+      if (posX[i] > W + pad) posX[i] = -pad;
+      if (posX[i] < -pad)    posX[i] = W + pad;
+      if (posY[i] > H + pad) posY[i] = -pad;
+      if (posY[i] < -pad)    posY[i] = H + pad;
+    } else {
+      // Silent clamp — no velocity reflection, the avoidance force handles direction
+      if (posX[i] < 0)  posX[i] = 0;
+      if (posX[i] > W)  posX[i] = W;
+      if (posY[i] < 0)  posY[i] = 0;
+      if (posY[i] > H)  posY[i] = H;
+    }
+  }
+}
+
+function calcPolarization() {
+  if (N === 0) return 0;
+  let sx = 0, sy = 0;
+  for (let i = 0; i < N; i++) {
+    const m = Math.sqrt(velX[i] * velX[i] + velY[i] * velY[i]);
+    if (m > 0.001) { sx += velX[i] / m; sy += velY[i] / m; }
+  }
+  return Math.sqrt(sx * sx + sy * sy) / N;
+}
+
+// ── Génération textures canvas ────────────────────────────────────
+function makeSkyTexture(W, H) {
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0,    'rgb(3,3,14)');
+  grad.addColorStop(0.50, 'rgb(7,5,22)');
+  grad.addColorStop(0.72, 'rgb(18,6,20)');
+  grad.addColorStop(0.88, 'rgb(48,10,6)');
+  grad.addColorStop(1,    'rgb(75,18,4)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  // Horizon glow
+  const glow = ctx.createRadialGradient(W / 2, H, 10, W / 2, H, W * 0.65);
+  glow.addColorStop(0,   'rgba(130,50,10,0.22)');
+  glow.addColorStop(0.5, 'rgba(80,20,5,0.08)');
+  glow.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+  return PIXI.Texture.from(c);
+}
+
+function makeStarTexture() {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 8;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(4, 4, 0, 4, 4, 4);
+  g.addColorStop(0,   'rgba(240,240,255,1)');
+  g.addColorStop(0.5, 'rgba(200,210,255,0.5)');
+  g.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 8, 8);
+  return PIXI.Texture.from(c);
+}
+
+function makeBirdTexture() {
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 24;
+  const ctx = c.getContext('2d');
+  // Polygon matching V1 vertices (shifted to canvas center 16,12)
+  const cx = 16, cy = 12;
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.moveTo(cx + 0,    cy - 9);
+  ctx.lineTo(cx + 2.5,  cy - 2);
+  ctx.lineTo(cx + 11,   cy - 5);
+  ctx.lineTo(cx + 4.5,  cy + 3);
+  ctx.lineTo(cx + 2,    cy + 7);
+  ctx.lineTo(cx + 0,    cy + 5.5);
+  ctx.lineTo(cx - 2,    cy + 7);
+  ctx.lineTo(cx - 4.5,  cy + 3);
+  ctx.lineTo(cx - 11,   cy - 5);
+  ctx.lineTo(cx - 2.5,  cy - 2);
+  ctx.closePath();
+  ctx.fill();
+  return PIXI.Texture.from(c);
+}
+
+// ── PIXI App ──────────────────────────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+
+const app = new PIXI.Application({
+  width: wrap.offsetWidth,
+  height: wrap.offsetHeight,
+  backgroundColor: 0x03030e,
+  antialias: false,
+  powerPreference: 'high-performance',
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  autoDensity: true,
+});
+wrap.appendChild(app.view);
+app.view.style.display = 'block';
+
+let W = app.screen.width, H = app.screen.height;
+let worldFactor = 3, birdScaleDivisor = 1, borderWalls = true;
+let worldW = W * 3, worldH = H * 3;
+
+// ── Hiérarchie de scène ───────────────────────────────────────────
+let skyTexture  = makeSkyTexture(W, H);
+const skySprite = new PIXI.Sprite(skyTexture);
+skySprite.width = W; skySprite.height = H;
+app.stage.addChild(skySprite);
+
+// Stars (screen space ParticleContainer)
+const starTexture   = makeStarTexture();
+const starContainer = new PIXI.ParticleContainer(150, { tint: true, alpha: true });
+app.stage.addChild(starContainer);
+
+const STAR_COUNT = 100;
+const starData   = [];
+for (let i = 0; i < STAR_COUNT; i++) {
+  const sp = new PIXI.Sprite(starTexture);
+  const sx = Math.random() * W;
+  const sy = Math.random() * H * 0.68;
+  const sc = 0.25 + Math.random() * 0.9;
+  sp.anchor.set(0.5);
+  sp.x = sx; sp.y = sy;
+  sp.scale.set(sc);
+  sp.alpha = 0.5 + Math.random() * 0.5;
+  starContainer.addChild(sp);
+  starData.push({ x: sx, y: sy, phase: Math.random() * Math.PI * 2, baseAlpha: 0.3 + Math.random() * 0.5, scale: sc });
+}
+
+// World container (camera transform)
+const world = new PIXI.Container();
+app.stage.addChild(world);
+
+const obsGfx  = new PIXI.Graphics();
+const trailGfx = new PIXI.Graphics();
+const predGfx  = new PIXI.Graphics();
+const zoneGfx  = new PIXI.Graphics();
+world.addChild(obsGfx);
+world.addChild(trailGfx);
+world.addChild(predGfx);
+world.addChild(zoneGfx);
+
+// Bird ParticleContainer
+const birdTexture   = makeBirdTexture();
+const birdContainer = new PIXI.ParticleContainer(MAX_N, {
+  vertices: false, uvs: false, tint: true,
+  position: true, rotation: true, scale: true, alpha: false,
+});
+world.addChild(birdContainer);
+
+// Pre-allocate sprites
+const sprites = [];
+for (let i = 0; i < MAX_N; i++) {
+  const sp = new PIXI.Sprite(birdTexture);
+  sp.anchor.set(0.5);
+  sp.visible = false;
+  birdContainer.addChild(sp);
+  sprites.push(sp);
+}
+
+// HUD (screen space)
+const hudContainer = new PIXI.Container();
+app.stage.addChild(hudContainer);
+
+const hudGfx = new PIXI.Graphics();
+hudContainer.addChild(hudGfx);
+
+const textStyle = new PIXI.TextStyle({ fontSize: 12, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' });
+const smallStyle = new PIXI.TextStyle({ fontSize: 10, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' });
+
+const phiText  = new PIXI.Text('0.00', new PIXI.TextStyle({ fontSize: 12, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' }));
+phiText.alpha = 0.7;
+hudContainer.addChild(phiText);
+
+const phiLabel = new PIXI.Text('polarisation', new PIXI.TextStyle({ fontSize: 8, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' }));
+phiLabel.alpha = 0.25;
+hudContainer.addChild(phiLabel);
+
+const fpsText = new PIXI.Text('', new PIXI.TextStyle({ fontSize: 11, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' }));
+fpsText.alpha = 0.25;
+hudContainer.addChild(fpsText);
+
+const cinHint = new PIXI.Text('[ C ]  panneau', new PIXI.TextStyle({ fontSize: 12, fill: 0xffffff, fontFamily: 'Segoe UI, system-ui, sans-serif' }));
+cinHint.alpha = 0.45;
+hudContainer.addChild(cinHint);
+
+function positionHUD() {
+  // Phi gauge: cx=56, cy=H-52
+  const cx = 56, cy = H - 52;
+  phiText.x  = cx - phiText.width / 2;
+  phiText.y  = cy + 5;
+  phiLabel.x = cx - phiLabel.width / 2;
+  phiLabel.y = cy + 19;
+  // FPS bottom centre
+  fpsText.x = W / 2 - fpsText.width / 2;
+  fpsText.y = H - 22;
+  // Cinema hint top right
+  cinHint.x = W - cinHint.width - 18;
+  cinHint.y = 18;
+}
+
+positionHUD();
+
+// ── Init boids ────────────────────────────────────────────────────
+const initParams = pr();
+N = initParams.count;
+for (let i = 0; i < N; i++) initBoid(i, worldW, worldH);
+
+// ── Resize ────────────────────────────────────────────────────────
+function onResize() {
+  W = wrap.offsetWidth; H = wrap.offsetHeight;
+  worldW = W * worldFactor; worldH = H * worldFactor;
+  app.renderer.resize(W, H);
+
+  skyTexture.destroy(true);
+  skyTexture = makeSkyTexture(W, H);
+  skySprite.texture = skyTexture;
+  skySprite.width = W; skySprite.height = H;
+
+  // Reposition stars
+  for (let i = 0; i < STAR_COUNT; i++) {
+    starData[i].x = Math.random() * W;
+    starData[i].y = Math.random() * H * 0.68;
+    starContainer.children[i].x = starData[i].x;
+    starContainer.children[i].y = starData[i].y;
+  }
+
+  positionHUD();
+}
+
+// ── Cinema toggle ─────────────────────────────────────────────────
+function toggleCinema() {
+  cinemaMode = !cinemaMode;
+  document.body.classList.toggle('cinema', cinemaMode);
+  g('btn-cinema').classList.toggle('active-gold', cinemaMode);
+  g('btn-cinema').innerHTML = cinemaMode
+    ? '🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span>'
+    : '🎬 Mode cinéma <span style="color:#555577;font-size:0.72rem">[C]</span>';
+  setTimeout(onResize, 420);
+}
+
+// ── Événements souris & clavier ───────────────────────────────────
+app.view.addEventListener('mousemove', e => {
+  const rect = app.view.getBoundingClientRect();
+  mouseScreenX = (e.clientX - rect.left) * (W / rect.width);
+  mouseScreenY = (e.clientY - rect.top)  * (H / rect.height);
+});
+
+app.view.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (followMode) return;
+  const factor  = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  const newZoom = Math.max(0.15, Math.min(6, cam.zoom * factor));
+  const r = newZoom / cam.zoom;
+  cam.x = mouseScreenX - (mouseScreenX - cam.x) * r;
+  cam.y = mouseScreenY - (mouseScreenY - cam.y) * r;
+  cam.zoom = newZoom;
+}, { passive: false });
+
+app.view.addEventListener('dblclick', () => {
+  cam.x = 0; cam.y = 0; cam.zoom = 1 / worldFactor;
+  if (followMode) { g('tog-follow').checked = false; followMode = false; }
+});
+
+app.view.addEventListener('click', e => {
+  const rect = app.view.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) * (W / rect.width);
+  const sy = (e.clientY - rect.top)  * (H / rect.height);
+  const [wx, wy] = screenToWorld(sx, sy);
+
+  if (obsMode) {
+    obstacles.push({ x: wx, y: wy, r: pr().obsR });
+    return;
+  }
+
+  // Find nearest boid
+  let minD = Infinity, closest = -1;
+  for (let i = 0; i < N; i++) {
+    const dx = posX[i] - wx, dy = posY[i] - wy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d < minD) { minD = d; closest = i; }
+  }
+
+  if (minD < 35 / cam.zoom) {
+    selected = (selected === closest) ? -1 : closest;
+    if (selected === -1 && followMode) { g('tog-follow').checked = false; followMode = false; }
+  } else {
+    selected = -1;
+    if (followMode) { g('tog-follow').checked = false; followMode = false; }
+  }
+  updateSelectedInfo();
+});
+
+app.view.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  if (!obsMode || obstacles.length === 0) return;
+  const rect = app.view.getBoundingClientRect();
+  const sx = (e.clientX - rect.left) * (W / rect.width);
+  const sy = (e.clientY - rect.top)  * (H / rect.height);
+  const [wx, wy] = screenToWorld(sx, sy);
+  let minD = Infinity, minI = -1;
+  obstacles.forEach((obs, i) => {
+    const d = Math.hypot(obs.x - wx, obs.y - wy);
+    if (d < minD) { minD = d; minI = i; }
+  });
+  if (minI >= 0 && minD < obstacles[minI].r + 20) obstacles.splice(minI, 1);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'c' || e.key === 'C') toggleCinema();
+  if (e.key === 'Escape' && cinemaMode) toggleCinema();
+});
+
+window.addEventListener('resize', onResize);
+
+// ── Draw HUD gauge ────────────────────────────────────────────────
+function drawPolarizationGauge(phi) {
+  const cx = 56, cy = H - 52, r = 30;
+  hudGfx.clear();
+
+  // Background arc
+  hudGfx.lineStyle(6, 0xffffff, 0.04);
+  hudGfx.arc(cx, cy, r, Math.PI, Math.PI * 2);
+
+  // Coloured arc
+  if (phi > 0.01) {
+    const pr2 = phi < 0.5 ? 255 : Math.round(255 - (phi - 0.5) * 400);
+    const pg2 = phi > 0.3 ? Math.round(100 + (phi - 0.3) / 0.7 * 120) : Math.round(phi * 333);
+    const arcColor = (Math.max(0, Math.min(255, pr2)) << 16) | (Math.max(0, Math.min(255, pg2)) << 8) | 32;
+    hudGfx.lineStyle(6, arcColor, 0.8);
+    hudGfx.arc(cx, cy, r, Math.PI, Math.PI + phi * Math.PI);
+  }
+
+  // Needle
+  const needleA = Math.PI + phi * Math.PI;
+  hudGfx.lineStyle(1.5, 0xffffff, 0.47);
+  hudGfx.moveTo(cx, cy);
+  hudGfx.lineTo(cx + Math.cos(needleA) * (r - 4), cy + Math.sin(needleA) * (r - 4));
+
+  // "0" and "1" labels drawn via text objects below; phi value via phiText
+
+  // If cinema mode show FPS and hint
+  if (cinemaMode) {
+    cinHint.visible = true;
+    fpsText.visible = true;
+  } else {
+    cinHint.visible = false;
+    fpsText.visible = false;
+  }
+
+  // Zoom indicator (via hudGfx too? use a quick text hack via Graphics rect)
+  // Actually handled via existing PIXI.Text objects — skip additional graphics here
+}
+
+// ── Update panel phi bar ──────────────────────────────────────────
+function updatePanelPhi(phi) {
+  g('phi-val').textContent  = phi.toFixed(2);
+  g('phi-bar').style.width  = (phi * 100) + '%';
+  const pr2 = phi < 0.5 ? 255 : Math.round(255 - (phi - 0.5) * 390);
+  const pg2 = phi > 0.3 ? Math.round(80 + (phi - 0.3) / 0.7 * 140) : Math.round(phi * 267);
+  g('phi-bar').style.background = `rgb(${Math.max(0,Math.min(255,pr2))},${Math.max(0,Math.min(255,pg2))},40)`;
+}
+
+// ── Update status text ────────────────────────────────────────────
+function updateStatus(params) {
+  const off = [];
+  if (!params.sepOn) off.push('séparation');
+  if (!params.aliOn) off.push('alignement');
+  if (!params.cohOn) off.push('cohésion');
+  let txt = '';
+  if (off.length === 3) {
+    txt = 'Toutes les règles désactivées — les agents dérivent librement, aucune interaction.';
+  } else if (!params.sepOn && !params.aliOn && params.cohOn) {
+    txt = "Cohésion pure — sans séparation, les agents s'effondrent vers un seul point.";
+  } else if (params.sepOn && !params.aliOn && !params.cohOn) {
+    txt = 'Séparation seule — les agents se repoussent sans se regrouper. Dispersion totale.';
+  } else if (!params.sepOn && params.aliOn && !params.cohOn) {
+    txt = 'Alignement seul — les agents synchronisent leurs directions mais dérivent sans groupe.';
+  } else if (off.length > 0) {
+    txt = `Règle${off.length > 1 ? 's' : ''} désactivée${off.length > 1 ? 's' : ''} : ${off.join(', ')}. Observez l'effet sur la formation.`;
+  } else if (predMode) {
+    txt = '🦅 Prédateur actif — approchez le curseur pour déclencher le vortex défensif (Ian Couzin, 2001).';
+  } else if (obsMode) {
+    txt = '🪨 Mode obstacles — clic gauche pour poser, clic droit pour supprimer.';
+  } else if (followMode && selected >= 0) {
+    txt = "📍 Mode focus — la caméra suit l'agent sélectionné.";
+  } else if (selected >= 0) {
+    txt = 'Agent inspecté. Activez "Suivre" pour zoomer dessus.';
+  } else {
+    const order = phi > 0.85 ? 'vol très ordonné' : phi > 0.6 ? 'groupe cohérent' : phi > 0.35 ? 'semi-organisé' : 'mouvement chaotique';
+    txt = `${N} agents — Φ = ${phi.toFixed(2)} (${order}).`;
+  }
+  g('status-box').textContent = txt;
+}
+
+function updateSelectedInfo() {
+  if (selected < 0 || selected >= N) {
+    g('selected-box').style.display = 'none';
+    return;
+  }
+  const ruleNames = [
+    '<span style="color:#ff7a7a">Séparation</span> — éviter la collision',
+    '<span style="color:#7ad27a">Alignement</span> — copier la direction',
+    '<span style="color:#5a9eff">Cohésion</span> — rejoindre le groupe',
+  ];
+  const spd = Math.sqrt(velX[selected] * velX[selected] + velY[selected] * velY[selected]).toFixed(2);
+  const dir = ((Math.atan2(velY[selected], velX[selected]) * 180 / Math.PI) + 360) % 360;
+  g('selected-box').style.display = 'block';
+  g('selected-content').innerHTML =
+    `<strong>Règle dominante :</strong><br>${ruleNames[domRule[selected]]}<br><br>` +
+    `<strong>Vitesse :</strong> ${spd} &nbsp; <strong>Direction :</strong> ${dir.toFixed(0)}°<br><br>` +
+    `<em style="color:#555577">Les cercles colorés montrent ses trois rayons de perception.</em>`;
+}
+
+// ── UI setup ──────────────────────────────────────────────────────
+function setupUI() {
+  [
+    ['sep-r', 'v-sep-r', v => v],
+    ['sep-w', 'v-sep-w', v => (v / 10).toFixed(1)],
+    ['ali-r', 'v-ali-r', v => v],
+    ['ali-w', 'v-ali-w', v => (v / 10).toFixed(1)],
+    ['coh-r', 'v-coh-r', v => v],
+    ['coh-w', 'v-coh-w', v => (v / 10).toFixed(1)],
+    ['s-count',    'v-count',    v => v],
+    ['s-speed',    'v-speed',    v => (v / 5).toFixed(1)],
+    ['obs-r',      'v-obs-r',    v => v],
+    ['s-trail-len','v-trail-len', v => v],
+  ].forEach(([sid, vid, fmt]) => {
+    g(sid).addEventListener('input', () => { g(vid).textContent = fmt(+g(sid).value); });
+  });
+
+  g('tog-trails').addEventListener('change', () => {
+    g('trail-len-row').style.opacity = g('tog-trails').checked ? '1' : '0.35';
+  });
+
+  ['sep', 'ali', 'coh'].forEach(r => {
+    g(`tog-${r}`).addEventListener('change', () => {
+      g(`block-${r}`).classList.toggle('off', !g(`tog-${r}`).checked);
+    });
+  });
+
+  g('tog-follow').addEventListener('change', () => {
+    followMode = g('tog-follow').checked;
+    if (followMode && selected < 0 && N > 0) {
+      selected = Math.floor(N / 2);
+      updateSelectedInfo();
+    }
+    if (!followMode) { cam.x = 0; cam.y = 0; cam.zoom = 1; }
+  });
+
+  g('btn-pred').addEventListener('click', () => {
+    predMode = !predMode;
+    g('btn-pred').classList.toggle('active-red', predMode);
+    g('btn-pred').textContent = predMode ? '🦅 Désactiver le prédateur' : '🦅 Activer le prédateur (souris)';
+  });
+
+  g('btn-obs').addEventListener('click', () => {
+    obsMode = !obsMode;
+    g('btn-obs').classList.toggle('active-purple', obsMode);
+    g('btn-obs').textContent = obsMode ? '🪨 Quitter le mode obstacles' : "🪨 Mode placement d'obstacles";
+    g('obs-controls').style.display = obsMode ? 'block' : 'none';
+    g('obs-hint').style.display     = obsMode ? 'block' : 'none';
+    wrap.classList.toggle('obs-cursor', obsMode);
+  });
+  g('btn-clear-obs').addEventListener('click', () => { obstacles = []; });
+
+  // Zone multiplier
+  document.querySelectorAll('#zone-btns .bg-btn').forEach(btn =>
+    btn.addEventListener('click', () => setWorldFactor(+btn.dataset.factor))
+  );
+
+  // Bird scale divisor
+  document.querySelectorAll('#scale-btns .bg-btn').forEach(btn =>
+    btn.addEventListener('click', () => setBirdScale(+btn.dataset.divisor))
+  );
+
+  // Border walls toggle
+  g('tog-walls').addEventListener('change', () => {
+    borderWalls = g('tog-walls').checked;
+  });
+
+  g('btn-cinema').addEventListener('click', toggleCinema);
+
+  g('btn-scatter').addEventListener('click', () => {
+    for (let i = 0; i < N; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 4 + Math.random() * 5;
+      velX[i] = Math.cos(angle) * speed;
+      velY[i] = Math.sin(angle) * speed;
+      accX[i] = 0; accY[i] = 0;
+      trails[i].length = 0;
+    }
+    selected = -1; followMode = false;
+    g('tog-follow').checked = false;
+    g('selected-box').style.display = 'none';
+    cam.x = 0; cam.y = 0; cam.zoom = 1;
+  });
+
+  g('btn-reset').addEventListener('click', () => {
+    selected = -1; predMode = false; obsMode = false; obstacles = [];
+    followMode = false; cam.x = 0; cam.y = 0; cam.zoom = 1;
+    g('tog-follow').checked = false;
+    g('btn-pred').classList.remove('active-red');
+    g('btn-pred').textContent = '🦅 Activer le prédateur (souris)';
+    g('btn-obs').classList.remove('active-purple');
+    g('btn-obs').textContent = "🪨 Mode placement d'obstacles";
+    g('obs-controls').style.display = 'none';
+    g('obs-hint').style.display = 'none';
+    g('selected-box').style.display = 'none';
+    wrap.classList.remove('obs-cursor');
+    // Re-init all boids at current count
+    const p2 = pr();
+    N = p2.count;
+    for (let i = 0; i < N; i++) initBoid(i, worldW, worldH);
+    // If was in cinema mode, keep it; reset does NOT toggle cinema
+  });
+}
+
+setupUI();
+
+// Initialiser le bouton cinéma en état actif (démarrage en mode cinéma)
+g('btn-cinema').classList.add('active-gold');
+g('btn-cinema').innerHTML = '🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span>';
+
+// ── Ticker principal ──────────────────────────────────────────────
+app.ticker.add((delta) => {
+  frameCount++;
+  const params = pr();
+
+  // 1. Adjust N
+  const targetN = params.count;
+  if (targetN > N) {
+    for (let i = N; i < targetN; i++) initBoid(i, worldW, worldH);
+    N = targetN;
+  } else if (targetN < N) {
+    // Hide extra sprites, clear trails
+    for (let i = targetN; i < N; i++) trails[i].length = 0;
+    N = targetN;
+    if (selected >= N) { selected = -1; updateSelectedInfo(); }
+  }
+
+  // 2. Build grid
+  const maxR = Math.max(
+    params.sepOn ? params.sepR : 0,
+    params.aliOn ? params.aliR : 0,
+    params.cohOn ? params.cohR : 0
+  );
+  grid.cs = Math.max(maxR, 40);
+  grid.clear();
+  for (let i = 0; i < N; i++) grid.insert(i);
+
+  // 3. Predator world coords
+  let predWX = 0, predWY = 0, predActive = false;
+  let flockCX = 0, flockCY = 0;
+  if (predMode) {
+    const [wx, wy] = screenToWorld(mouseScreenX, mouseScreenY);
+    predWX = wx; predWY = wy; predActive = true;
+    for (let i = 0; i < N; i++) { flockCX += posX[i]; flockCY += posY[i]; }
+    if (N > 0) { flockCX /= N; flockCY /= N; }
+  }
+
+  // 4. Physics step
+  stepPhysics(params, predWX, predWY, predActive, flockCX, flockCY, worldW, worldH);
+
+  // 5. Trail update
+  if (params.trails) {
+    for (let i = 0; i < N; i++) {
+      const t = trails[i];
+      t.push(posX[i], posY[i]);
+      const maxLen = params.trailLen * 2; // 2 floats per point
+      while (t.length > maxLen) { t.shift(); t.shift(); }
+    }
+  } else {
+    for (let i = 0; i < N; i++) {
+      if (trails[i].length > 0) trails[i].length = 0;
+    }
+  }
+
+  // 6. Sky toggle
+  skySprite.visible = params.sky;
+  starContainer.visible = params.sky;
+
+  // 7. Sync bird sprites
+  const TINT_SEP = 0xff5a5a, TINT_ALI = 0x5ad25a, TINT_COH = 0x4a9eff, TINT_DEF = 0xc8d2f0;
+  const TINT_SEL = 0xffe63c;
+  for (let i = 0; i < MAX_N; i++) {
+    const sp = sprites[i];
+    if (i < N) {
+      sp.visible = true;
+      sp.x = posX[i];
+      sp.y = posY[i];
+      sp.rotation = Math.atan2(velY[i], velX[i]) + Math.PI * 0.5;
+      if (i === selected) {
+        sp.tint = TINT_SEL;
+      } else if (params.colors) {
+        sp.tint = domRule[i] === 0 ? TINT_SEP : domRule[i] === 1 ? TINT_ALI : TINT_COH;
+      } else {
+        sp.tint = TINT_DEF;
+      }
+    } else {
+      sp.visible = false;
+    }
+  }
+
+  // 8. Draw trails
+  trailGfx.clear();
+  if (params.trails) {
+    for (let i = 0; i < N; i++) {
+      const t = trails[i];
+      const pts = t.length / 2;
+      if (pts < 2) continue;
+      let cr, cg, cb;
+      if (!params.colors)      { cr = 200; cg = 210; cb = 240; }
+      else if (domRule[i] === 0) { cr = 255; cg = 90;  cb = 90; }
+      else if (domRule[i] === 1) { cr = 90;  cg = 210; cb = 90; }
+      else                       { cr = 74;  cg = 158; cb = 255; }
+      for (let k = 1; k < pts; k++) {
+        const frac = k / pts;
+        const alpha = frac * frac * 0.55;
+        const thick = frac * 2.2;
+        const col = (cr << 16) | (cg << 8) | cb;
+        trailGfx.lineStyle(thick, col, alpha);
+        trailGfx.moveTo(t[(k - 1) * 2], t[(k - 1) * 2 + 1]);
+        trailGfx.lineTo(t[k * 2],       t[k * 2 + 1]);
+      }
+    }
+  }
+
+  // 9. Draw velocity vectors
+  if (params.vectors) {
+    for (let i = 0; i < N; i++) {
+      trailGfx.lineStyle(1, 0xffe63c, 0.55);
+      trailGfx.moveTo(posX[i], posY[i]);
+      trailGfx.lineTo(posX[i] + velX[i] * 10, posY[i] + velY[i] * 10);
+    }
+  }
+
+  // 10. Draw obstacles + world boundary
+  obsGfx.clear();
+  if (borderWalls) {
+    obsGfx.lineStyle(1.5, 0xff9955, 0.35);
+    obsGfx.drawRect(0, 0, worldW, worldH);
+  } else if (worldFactor > 1) {
+    obsGfx.lineStyle(1, 0x4a9eff, 0.15);
+    obsGfx.drawRect(0, 0, worldW, worldH);
+  }
+  for (const obs of obstacles) {
+    // Glow halo
+    obsGfx.beginFill(0x1e143c, 0.2);
+    obsGfx.drawCircle(obs.x, obs.y, obs.r + 10);
+    obsGfx.endFill();
+    // Body
+    obsGfx.lineStyle(1.5, 0x463c64, 0.7);
+    obsGfx.beginFill(0x14121e, 1);
+    obsGfx.drawCircle(obs.x, obs.y, obs.r);
+    obsGfx.endFill();
+    // Highlight
+    obsGfx.lineStyle(0);
+    obsGfx.beginFill(0x3c3259, 0.27);
+    obsGfx.drawCircle(obs.x - obs.r * 0.22, obs.y - obs.r * 0.22, obs.r * 0.45);
+    obsGfx.endFill();
+  }
+  // Obstacle preview
+  if (obsMode) {
+    const [wx, wy] = screenToWorld(mouseScreenX, mouseScreenY);
+    obsGfx.lineStyle(1.5, 0xa078ff, 0.63);
+    obsGfx.drawCircle(wx, wy, params.obsR);
+  }
+
+  // 11. Draw predator
+  predGfx.clear();
+  if (predActive) {
+    const [wx, wy] = screenToWorld(mouseScreenX, mouseScreenY);
+    predGfx.lineStyle(1, 0xff5050, 0.22);
+    predGfx.drawCircle(wx, wy, 160);
+    predGfx.lineStyle(1, 0xff5050, 0.12);
+    predGfx.drawCircle(wx, wy, 320);
+    predGfx.endFill();
+  }
+
+  // 12. Draw perception zones for selected boid
+  zoneGfx.clear();
+  if (selected >= 0 && selected < N) {
+    const sx2 = posX[selected], sy2 = posY[selected];
+    if (params.sepOn) {
+      zoneGfx.lineStyle(1, 0xff5a5a, 0.43);
+      zoneGfx.beginFill(0xff5a5a, 0.027);
+      zoneGfx.drawCircle(sx2, sy2, params.sepR);
+      zoneGfx.endFill();
+    }
+    if (params.aliOn) {
+      zoneGfx.lineStyle(1, 0x5ad25a, 0.35);
+      zoneGfx.beginFill(0x5ad25a, 0.02);
+      zoneGfx.drawCircle(sx2, sy2, params.aliR);
+      zoneGfx.endFill();
+    }
+    if (params.cohOn) {
+      zoneGfx.lineStyle(1, 0x4a9eff, 0.27);
+      zoneGfx.beginFill(0x4a9eff, 0.016);
+      zoneGfx.drawCircle(sx2, sy2, params.cohR);
+      zoneGfx.endFill();
+    }
+  }
+
+  // 13. Animate stars
+  if (params.sky) {
+    for (let i = 0; i < STAR_COUNT; i++) {
+      const twinkle = 0.65 + 0.35 * Math.sin(frameCount * 0.015 + starData[i].phase);
+      const yFade   = 1 - Math.min(starData[i].y / (H * 0.6), 1) * 0.5;
+      starContainer.children[i].alpha = starData[i].baseAlpha * twinkle * yFade;
+    }
+  }
+
+  // 14. Camera follow
+  if (followMode && selected >= 0 && selected < N) {
+    const tz = 3.5;
+    cam.zoom += (tz - cam.zoom) * 0.07;
+    cam.x += (W / 2 - posX[selected] * cam.zoom - cam.x) * 0.07;
+    cam.y += (H / 2 - posY[selected] * cam.zoom - cam.y) * 0.07;
+  }
+
+  // 15. Apply camera to world
+  world.x = cam.x; world.y = cam.y; world.scale.set(cam.zoom);
+
+  // 16. Update HUD
+  phi += (calcPolarization() - phi) * 0.06;
+  drawPolarizationGauge(phi);
+
+  phiText.text = phi.toFixed(2);
+  phiText.x = 56 - phiText.width / 2;
+  phiText.y = H - 52 + 5;
+  phiLabel.x = 56 - phiLabel.width / 2;
+  phiLabel.y = H - 52 + 19;
+
+  fpsText.x = W / 2 - fpsText.width / 2;
+  fpsText.y = H - 22;
+  cinHint.x = W - cinHint.width - 18;
+  cinHint.y = 18;
+
+  // 17. FPS counter
+  fpsFrames++;
+  const now = performance.now();
+  if (fpsLast === 0) fpsLast = now;
+  if (now - fpsLast > 600) {
+    lastFps = Math.round(fpsFrames / ((now - fpsLast) / 1000));
+    fpsFrames = 0; fpsLast = now;
+    fpsText.text = `${lastFps} fps`;
+    g('counter').textContent = `${N} agents · ${lastFps} fps`;
+  }
+
+  // 18. Update panel
+  updatePanelPhi(phi);
+  updateStatus(params);
+  if (selected >= 0 && selected < N) updateSelectedInfo();
+});
+</script>
+</body>
+</html>

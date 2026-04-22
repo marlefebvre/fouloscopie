@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fouloscopie — Simulateurs</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #07071a;
+      color: #e0e0f0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      overflow: hidden;
+    }
+
+    canvas#bg {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      opacity: 0.25;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 56px;
+    }
+
+    h1 {
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-weight: 700;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #4a9eff 0%, #a855f7 50%, #ff6b6b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      color: #6666aa;
+      letter-spacing: 0.06em;
+      line-height: 1.6;
+      max-width: 520px;
+    }
+
+    .simulateurs {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 20px;
+      width: 100%;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      padding: 30px 28px;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.04), transparent 60%);
+      pointer-events: none;
+    }
+
+    .card:not(.disabled):hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.2);
+      transform: translateY(-5px);
+    }
+
+    .card.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .card-icon {
+      font-size: 2.6rem;
+      margin-bottom: 18px;
+      display: block;
+    }
+
+    .card-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #d0d0f0;
+    }
+
+    .card-desc {
+      font-size: 0.85rem;
+      color: #7777aa;
+      line-height: 1.7;
+      margin-bottom: 16px;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+
+    .tag.available {
+      background: rgba(74, 158, 255, 0.15);
+      color: #4a9eff;
+      border: 1px solid rgba(74, 158, 255, 0.3);
+    }
+
+    .tag.soon {
+      background: rgba(255,255,255,0.06);
+      color: #5a5a7a;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .tag.concept {
+      background: rgba(168, 85, 247, 0.12);
+      color: #a855f7;
+      border: 1px solid rgba(168, 85, 247, 0.2);
+    }
+
+    .card-accent {
+      position: absolute;
+      top: 0; right: 0;
+      width: 80px; height: 80px;
+      border-radius: 0 18px 0 80px;
+      opacity: 0.08;
+    }
+
+    .card-murmuration .card-accent { background: #4a9eff; }
+    .card-foule .card-accent { background: #f59e0b; }
+    .card-contagion .card-accent { background: #a855f7; }
+
+    footer {
+      margin-top: 52px;
+      text-align: center;
+      color: #33334a;
+      font-size: 0.8rem;
+      line-height: 2;
+    }
+
+    footer a { color: #4a5570; text-decoration: none; }
+    footer a:hover { color: #6a75a0; }
+  </style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="content">
+  <header>
+    <h1>Fouloscopie</h1>
+    <p class="subtitle">La science des comportements collectifs —<br>Simulateurs pédagogiques & interactifs</p>
+  </header>
+
+  <div class="simulateurs">
+
+    <a href="murmuration.html" class="card card-murmuration">
+      <div class="card-accent"></div>
+      <span class="card-icon">🐦</span>
+      <div class="card-title">Murmuration d'oiseaux</div>
+      <div class="card-desc">
+        Explorez les trois règles de Reynolds qui génèrent les vols collectifs des étourneaux :
+        séparation, alignement, cohésion. Activez un prédateur, désactivez des règles,
+        inspectez chaque agent.
+      </div>
+      <div class="card-tags">
+        <span class="tag available">✓ Disponible</span>
+        <span class="tag concept">Boids · Reynolds 1986</span>
+      </div>
+    </a>
+
+    <a href="murmuration-v2.html" class="card card-murmuration">
+      <div class="card-accent" style="background:#a855f7"></div>
+      <span class="card-icon">🐦✨</span>
+      <div class="card-title">Murmuration V2 <span style="font-size:0.7rem;color:#a855f7;font-weight:500">GPU</span></div>
+      <div class="card-desc">
+        Même simulation, moteur WebGL via PIXI.js. Rendu GPU en un seul draw call,
+        physique en Float32Array — jusqu'à 3 000 oiseaux en temps réel.
+      </div>
+      <div class="card-tags">
+        <span class="tag available">✓ Disponible</span>
+        <span class="tag concept">PIXI.js · WebGL</span>
+      </div>
+    </a>
+
+    <a href="foule.html" class="card card-foule">
+      <div class="card-accent"></div>
+      <span class="card-icon">🚶</span>
+      <div class="card-title">Foule humaine</div>
+      <div class="card-desc">
+        Dessinez des espaces, placez des murs, des obstacles et des sorties.
+        Observez les phénomènes d'évacuation, l'effet "faster-is-slower"
+        et l'obstacle fluidifiant de Helbing.
+      </div>
+      <div class="card-tags">
+        <span class="tag available">✓ Disponible</span>
+        <span class="tag concept">Forces sociales · Helbing</span>
+      </div>
+    </a>
+
+    <div class="card card-contagion disabled">
+      <div class="card-accent"></div>
+      <span class="card-icon">🌊</span>
+      <div class="card-title">Contagion sociale</div>
+      <div class="card-desc">
+        Simulez la propagation d'une information, d'une émotion ou d'une rumeur
+        dans un réseau social. Modèles épidémiologiques appliqués
+        aux comportements humains.
+      </div>
+      <div class="card-tags">
+        <span class="tag soon">Bientôt</span>
+        <span class="tag concept">SIR · Moussaid</span>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>Fondé sur les travaux de <strong style="color:#4a5570">Craig Reynolds</strong> (1986),
+       <strong style="color:#4a5570">Dirk Helbing</strong> et <strong style="color:#4a5570">Mehdi Moussaid</strong></p>
+    <p>Terme « fouloscopie » inventé par <strong style="color:#4a5570">Marion Montaigne</strong> (2014)</p>
+  </footer>
+</div>
+
+<script>
+// Fond animé — particules légères O(n), sans interaction inter-agents
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+
+// Particule : marche aléatoire avec légère dérive sinusoïdale
+class Particle {
+  constructor() {
+    this.x    = Math.random() * (W || 800);
+    this.y    = Math.random() * (H || 600);
+    this.angle = Math.random() * Math.PI * 2;
+    this.speed = Math.random() * 0.6 + 0.2;
+    this.turn  = (Math.random() - 0.5) * 0.04;   // courbure douce
+    this.size  = Math.random() * 1.4 + 0.4;
+    this.hue   = Math.random() > 0.5 ? 220 : 270; // bleu ou violet
+    this.age   = Math.random() * 600;             // décalage de phase
+  }
+  update() {
+    this.age++;
+    this.angle += this.turn + Math.sin(this.age * 0.008) * 0.015;
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed;
+    if (this.x < -10) this.x = W + 10;
+    if (this.x > W+10) this.x = -10;
+    if (this.y < -10) this.y = H + 10;
+    if (this.y > H+10) this.y = -10;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${this.hue}, 80%, 70%, 0.75)`;
+    ctx.fill();
+  }
+}
+
+resize();
+window.addEventListener('resize', resize);
+
+const particles = Array.from({length: 90}, () => new Particle());
+
+(function loop() {
+  ctx.fillStyle = 'rgba(7,7,26,0.18)';
+  ctx.fillRect(0, 0, W, H);
+  for (const p of particles) { p.update(); p.draw(); }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

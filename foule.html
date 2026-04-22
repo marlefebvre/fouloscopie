@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>Foule Humaine — Fouloscopie</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #07071a; color: #e0e0f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex; height: 100vh; overflow: hidden;
+    }
+    #canvas-wrap {
+      flex: 1; position: relative; overflow: hidden;
+      cursor: crosshair;
+    }
+    #canvas-wrap.cur-erase { cursor: cell; }
+    #canvas-wrap canvas { display: block; }
+
+    #panel {
+      width: 290px; min-width: 290px;
+      background: rgba(8,8,24,0.97);
+      border-left: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column;
+      overflow-y: auto; overflow-x: hidden;
+    }
+    #panel::-webkit-scrollbar { width: 4px; }
+    #panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .panel-header {
+      padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    .back-btn {
+      color: #555577; text-decoration: none; font-size: 0.8rem;
+      padding: 4px 9px; border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 6px; transition: all 0.2s; white-space: nowrap;
+    }
+    .back-btn:hover { color: #9999bb; border-color: rgba(255,255,255,0.18); }
+    .panel-title { font-size: 0.95rem; font-weight: 600; color: #c0c0e0; }
+
+    .section { padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+    .section-label {
+      font-size: 0.65rem; text-transform: uppercase;
+      letter-spacing: 0.18em; color: #444466; font-weight: 700; margin-bottom: 11px;
+    }
+
+    .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .tool-btn {
+      padding: 8px 10px; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08); color: #8888aa;
+      border-radius: 8px; cursor: pointer; font-size: 0.78rem;
+      text-align: center; transition: all 0.2s; font-family: inherit;
+    }
+    .tool-btn:hover { background: rgba(255,255,255,0.09); color: #c0c0e0; }
+    .tool-btn.active { background: rgba(74,158,255,0.15); border-color: rgba(74,158,255,0.4); color: #4a9eff; }
+    .tool-btn.active.t-exit  { background: rgba(60,200,100,0.15); border-color: rgba(60,200,100,0.4); color: #3cc864; }
+    .tool-btn.active.t-erase { background: rgba(255,120,60,0.15);  border-color: rgba(255,120,60,0.4);  color: #ff783c; }
+
+    .slider-row { margin-bottom: 7px; }
+    .slider-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+    .slider-name { font-size: 0.72rem; color: #7777aa; }
+    .slider-val  { font-size: 0.72rem; color: #9999cc; font-weight: 600; min-width: 30px; text-align: right; }
+    input[type=range] {
+      width: 100%; height: 3px; -webkit-appearance: none; appearance: none;
+      background: rgba(255,255,255,0.08); border-radius: 2px; outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+      background: #4a9eff; cursor: pointer; transition: transform 0.1s;
+    }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+    .btn {
+      width: 100%; padding: 9px 12px; margin-bottom: 6px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+      color: #9999bb; border-radius: 8px; cursor: pointer; font-size: 0.8rem;
+      text-align: left; transition: all 0.2s; font-family: inherit;
+    }
+    .btn:hover { background: rgba(255,255,255,0.09); color: #c0c0e0; }
+    .btn.danger { color: #ff6666; }
+    .btn.active-red    { background: rgba(255,60,60,0.12);   border-color: rgba(255,60,60,0.35);   color: #ff7070; }
+    .btn.active-orange { background: rgba(255,160,40,0.12);  border-color: rgba(255,160,40,0.35);  color: #ffaa44; }
+
+    .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .ctrl-label { font-size: 0.8rem; color: #8888aa; }
+    .toggle { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
+    .toggle input { display: none; }
+    .tog {
+      position: absolute; inset: 0; background: rgba(255,255,255,0.1);
+      border-radius: 18px; cursor: pointer; transition: background 0.2s;
+    }
+    .tog::after {
+      content: ''; position: absolute; width: 12px; height: 12px;
+      background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s;
+    }
+    .toggle input:checked + .tog { background: #4a9eff; }
+    .toggle input:checked + .tog::after { left: 19px; }
+
+    #info-section { padding: 14px 18px; flex: 1; }
+    #status-box {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 11px 12px; font-size: 0.77rem;
+      color: #7777aa; line-height: 1.65; min-height: 72px;
+    }
+    #stats-box {
+      margin-top: 10px; background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05); border-radius: 10px;
+      padding: 10px 12px; font-size: 0.75rem; color: #666688; line-height: 1.9;
+    }
+    .stat-row { display: flex; justify-content: space-between; }
+    .stat-val  { color: #9999cc; font-weight: 600; }
+    .tp-bar-wrap { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+    #tp-bar { height: 100%; width: 0%; background: #4a9eff; border-radius: 2px; transition: width 0.6s, background 0.4s; }
+
+    .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: #7777aa; }
+
+    #counter { font-size: 0.68rem; color: #333355; padding: 8px 18px; border-top: 1px solid rgba(255,255,255,0.04); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<div id="canvas-wrap">
+  <canvas id="sim-canvas"></canvas>
+</div>
+
+<aside id="panel">
+  <div class="panel-header">
+    <a href="index.html" class="back-btn">← Accueil</a>
+    <span class="panel-title">🚶 Foule humaine</span>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Outils de dessin</div>
+    <div class="tools">
+      <button class="tool-btn active"  id="tool-wall">🧱 Mur</button>
+      <button class="tool-btn t-exit"  id="tool-exit">🚪 Sortie</button>
+      <button class="tool-btn"         id="tool-pilier">⬛ Pilier</button>
+      <button class="tool-btn t-erase" id="tool-erase">🧹 Effacer</button>
+    </div>
+    <div class="slider-row" style="margin-top:10px">
+      <div class="slider-meta"><span class="slider-name">Épaisseur du pinceau</span><span class="slider-val" id="v-brush">2</span></div>
+      <input type="range" id="s-brush" min="1" max="8" value="2">
+    </div>
+    <button class="btn danger" id="btn-clearall">🗑️ Tout effacer</button>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Scènes préréglées</div>
+    <button class="btn" id="preset-room">🏠 Salle avec une sortie</button>
+    <button class="btn" id="preset-corridor">🏃 Couloir d'évacuation</button>
+    <button class="btn" id="preset-bidir">↔ Flux bidirectionnel</button>
+    <button class="btn" id="preset-two">🚪🚪 Deux sorties</button>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Simulation</div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Nombre d'agents</span><span class="slider-val" id="v-count">80</span></div>
+      <input type="range" id="s-count" min="10" max="250" value="80">
+    </div>
+    <div class="slider-row">
+      <div class="slider-meta"><span class="slider-name">Vitesse désirée</span><span class="slider-val" id="v-speed">1.5</span></div>
+      <input type="range" id="s-speed" min="3" max="55" value="15">
+    </div>
+    <div class="ctrl-row" style="margin-top:4px">
+      <span class="ctrl-label">Simulation active</span>
+      <label class="toggle"><input type="checkbox" id="tog-run" checked><div class="tog"></div></label>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Phénomènes pédagogiques</div>
+    <button class="btn" id="btn-panic">⚡ Faster-is-Slower (panique)</button>
+    <button class="btn" id="btn-pilier-auto">🔵 Placer le pilier fluidifiant</button>
+    <button class="btn" id="btn-respawn">↺ Réinitialiser les agents</button>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Visualisation</div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Pression locale (densité)</span>
+      <label class="toggle"><input type="checkbox" id="tog-pressure" checked><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Vecteurs de vitesse</span>
+      <label class="toggle"><input type="checkbox" id="tog-vec"><div class="tog"></div></label>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Champ de flux</span>
+      <label class="toggle"><input type="checkbox" id="tog-flow"><div class="tog"></div></label>
+    </div>
+    <div class="legend" id="legend-pressure">
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#5090ff;flex-shrink:0"></div>Seul</div>
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#ffcc00;flex-shrink:0"></div>Dense</div>
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#ff4040;flex-shrink:0"></div>Pression</div>
+    </div>
+    <div class="legend" id="legend-speed" style="display:none">
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#508cff;flex-shrink:0"></div>Sortie 0</div>
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#dd7020;flex-shrink:0"></div>Sortie 1</div>
+      <div class="legend-item"><div style="width:9px;height:9px;border-radius:50%;background:#32d060;flex-shrink:0"></div>Sortie 2</div>
+    </div>
+  </div>
+
+  <div id="info-section">
+    <div class="section-label">Ce qui se passe</div>
+    <div id="status-box">Chargez une scène ou dessinez. Placez au moins une sortie (🚪) pour démarrer la simulation.</div>
+    <div id="stats-box">
+      <div class="stat-row"><span>Agents actifs</span><span class="stat-val" id="s-agents">0</span></div>
+      <div class="stat-row"><span>Total sortis</span><span class="stat-val" id="s-exited">0</span></div>
+      <div class="stat-row"><span>Débit (agents/s)</span><span class="stat-val" id="s-tp">0.0</span></div>
+      <div class="tp-bar-wrap"><div id="tp-bar"></div></div>
+      <div id="s-exits-detail" style="margin-top:8px;font-size:0.72rem;color:#555577;line-height:1.8"></div>
+    </div>
+  </div>
+
+  <div id="counter">0 agents · — fps</div>
+</aside>
+
+<script>
+// ================================================================
+// FOULOSCOPIE — Foule Humaine  (Canvas 2D pur, zéro bibliothèque)
+// Modèle de forces sociales — Helbing & Molnár (1995)
+// ================================================================
+
+const CELL  = 8;
+const EMPTY = 0, WALL = 1, EXIT = 2;
+
+// Constantes Helbing (espace pixel, dt=1 frame)
+const TAU    = 20;
+const A_SOC  = 16, B_SOC  = 11, K_BODY  = 65;
+const A_WALL = 26, B_WALL = 5,  K_WALL  = 100;
+
+// ── Canvas & état ─────────────────────────────────────────────
+const canvas    = document.getElementById('sim-canvas');
+const ctx       = canvas.getContext('2d');
+const gridCvs   = document.createElement('canvas'); // offscreen pour la grille
+const gridCtx   = gridCvs.getContext('2d');
+
+let W, H, COLS, ROWS;
+let grid;
+let gridDirty = true;
+
+let flowFields = [], distFields = [], exitGroups = [], flowDirty = true;
+let agents = [], spawnZones = [];
+let spatialGrid;
+
+let tool        = 'wall';
+let brushSize   = 2;
+let simOn       = true;
+let panicMode   = false;
+let speedBase   = 1.5;
+let targetCount = 80;
+
+let showPressure = true, showVectors = true, showFlow = true;
+
+let exitedTotal = 0, throughput = 0;
+let tpLast = 0, tpExited = 0, tpMax = 0.1;
+
+let mouseX = -999, mouseY = -999, drawing = false;
+let fpsCount = 0, fpsLast = 0;
+
+const g = id => document.getElementById(id);
+
+// ── Grille ────────────────────────────────────────────────────
+const inBounds = (c, r) => c >= 0 && c < COLS && r >= 0 && r < ROWS;
+const getCell  = (c, r) => inBounds(c, r) ? grid[r * COLS + c] : WALL;
+const setCell  = (c, r, v) => { if (inBounds(c, r)) grid[r * COLS + c] = v; };
+const toCol    = x => Math.floor(x / CELL);
+const toRow    = y => Math.floor(y / CELL);
+
+// ── Grille spatiale ───────────────────────────────────────────
+class SpatialGrid {
+  constructor(cs, w, h) {
+    this.cs   = cs;
+    this.cols = Math.ceil(w / cs);
+    this.rows = Math.ceil(h / cs);
+    this.data = Array.from({length: this.cols * this.rows}, () => []);
+  }
+  clear() { for (const c of this.data) c.length = 0; }
+  insert(a) {
+    const c = Math.floor(a.x / this.cs), r = Math.floor(a.y / this.cs);
+    if (c >= 0 && c < this.cols && r >= 0 && r < this.rows)
+      this.data[r * this.cols + c].push(a);
+  }
+  nearby(a, radius) {
+    const out = [];
+    const c0 = Math.max(0, Math.floor((a.x - radius) / this.cs));
+    const r0 = Math.max(0, Math.floor((a.y - radius) / this.cs));
+    const c1 = Math.min(this.cols-1, Math.floor((a.x + radius) / this.cs));
+    const r1 = Math.min(this.rows-1, Math.floor((a.y + radius) / this.cs));
+    for (let r = r0; r <= r1; r++)
+      for (let c = c0; c <= c1; c++)
+        for (const x of this.data[r * this.cols + c])
+          if (x !== a) out.push(x);
+    return out;
+  }
+}
+
+// ── Agent ─────────────────────────────────────────────────────
+class Agent {
+  constructor(x, y, exitId) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 0.6;
+    this.vy = (Math.random() - 0.5) * 0.6;
+    // Distribution gaussienne approchée (somme de 3 uniforms) centrée sur 1.0
+    // → vitesses individuelles entre ~0.4× et ~1.6× la vitesse de base
+    const g = Math.random() + Math.random() + Math.random();   // [0,3]
+    this.speedFactor = Math.max(0.4, Math.min(1.6, (g - 1.5) * 0.35 + 1.0));
+    this.radius  = 4.2 + Math.random() * 1.8; // corpulences variées (4.2–6 px)
+    this.exitId  = exitId;
+    this.density = 0;
+  }
+
+  flowDir() {
+    const c = toCol(this.x), r = toRow(this.y);
+    const ff = flowFields[this.exitId];
+    if (!ff || !inBounds(c, r)) return null;
+    return ff[r * COLS + c];
+  }
+
+  update(nearby) {
+    const dir = this.flowDir();
+    let fx = 0, fy = 0;
+
+    // ① Force désirée — vitesse propre à chaque agent
+    const mySpeed = speedBase * this.speedFactor;
+    if (dir) {
+      fx += (dir.x * mySpeed - this.vx) / TAU;
+      fy += (dir.y * mySpeed - this.vy) / TAU;
+    }
+
+    // ② Répulsion sociale inter-agents
+    this.density = 0;
+    for (const o of nearby) {
+      const dx = this.x - o.x, dy = this.y - o.y;
+      const d  = Math.hypot(dx, dy);
+      const r  = this.radius + o.radius;
+      if (d > r * 4.5) continue;
+      this.density++;
+      const nx = d > 0 ? dx / d : Math.random() - 0.5;
+      const ny = d > 0 ? dy / d : Math.random() - 0.5;
+      const mag = A_SOC * Math.exp((r - d) / B_SOC);
+      fx += nx * mag; fy += ny * mag;
+      if (d < r) { fx += nx * K_BODY * (r - d); fy += ny * K_BODY * (r - d); }
+    }
+
+    // ③ Répulsion des murs
+    const cc = toCol(this.x), cr = toRow(this.y);
+    const chk = Math.ceil(this.radius * 3 / CELL) + 1;
+    for (let dr = -chk; dr <= chk; dr++) {
+      for (let dc = -chk; dc <= chk; dc++) {
+        if (getCell(cc + dc, cr + dr) !== WALL) continue;
+        const wx = Math.max((cc+dc)*CELL, Math.min((cc+dc+1)*CELL, this.x));
+        const wy = Math.max((cr+dr)*CELL, Math.min((cr+dr+1)*CELL, this.y));
+        const ddx = this.x - wx, ddy = this.y - wy;
+        const d = Math.hypot(ddx, ddy);
+        if (d <= 0 || d >= this.radius * 3) continue;
+        const nx = ddx / d, ny = ddy / d;
+        const wm = A_WALL * Math.exp((this.radius - d) / B_WALL);
+        fx += nx * wm; fy += ny * wm;
+        if (d < this.radius) { fx += nx * K_WALL * (this.radius - d); fy += ny * K_WALL * (this.radius - d); }
+      }
+    }
+
+    // Application
+    this.vx += fx; this.vy += fy;
+    const spd = Math.hypot(this.vx, this.vy);
+    const maxSpd = mySpeed * 3.2;
+    if (spd > maxSpd) { this.vx = this.vx / spd * maxSpd; this.vy = this.vy / spd * maxSpd; }
+    this.x += this.vx; this.y += this.vy;
+    this.x = Math.max(this.radius, Math.min(W - this.radius, this.x));
+    this.y = Math.max(this.radius, Math.min(H - this.radius, this.y));
+  }
+
+  atExit() { return getCell(toCol(this.x), toRow(this.y)) === EXIT; }
+
+  draw() {
+    const t = Math.min(this.density / 12, 1);
+    let r, gv, b;
+    if (!showPressure) {
+      // Sans pression : couleur par sortie cible (+ teinte vitesse légère)
+      const sf = (this.speedFactor - 0.4) / 1.2; // [0,1]
+      if (this.exitId === 1)      { r = Math.round(220+20*sf); gv = Math.round(110+30*sf); b = Math.round(30+20*sf); }
+      else if (this.exitId === 2) { r = Math.round(50+20*sf);  gv = Math.round(210+30*sf); b = Math.round(80+20*sf); }
+      else                        { r = Math.round(40+60*sf);  gv = Math.round(130+70*sf); b = Math.round(255-60*sf); }
+    } else if (t < 0.5) {
+      const s = t * 2;
+      r = Math.round(80 + 175 * s); gv = Math.round(160 + 40 * s); b = Math.round(255 - 215 * s);
+    } else {
+      const s = (t - 0.5) * 2;
+      r = 255; gv = Math.round(200 - 150 * s); b = 40;
+    }
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${r},${gv},${b},0.88)`;
+    ctx.fill();
+
+    if (showVectors && Math.hypot(this.vx, this.vy) > 0.2) {
+      ctx.strokeStyle = 'rgba(255,230,60,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + this.vx * 8, this.y + this.vy * 8);
+      ctx.stroke();
+    }
+  }
+}
+
+// ── Champ de flux (BFS depuis sorties) ────────────────────────
+// BFS correct O(n) — chaque cellule visitée une seule fois
+// Les queues sont des Int32Array pré-alloués pour éviter toute allocation d'objets
+function computeFlowField(exitCells) {
+  const n    = COLS * ROWS;
+  const dist = new Int32Array(n).fill(-1);  // -1 = non atteint
+  const qc   = new Int32Array(n);           // queue colonnes
+  const qr   = new Int32Array(n);           // queue lignes
+  let head = 0, tail = 0;
+  const dirs8 = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
+
+  for (const {c, r} of exitCells) {
+    const idx = r * COLS + c;
+    if (dist[idx] !== -1) continue;
+    dist[idx] = 0; qc[tail] = c; qr[tail++] = r;
+  }
+
+  while (head < tail) {
+    const c = qc[head], r = qr[head++];
+    const d = dist[r * COLS + c] + 1;
+    for (const [dc, dr] of dirs8) {
+      const nc = c + dc, nr = r + dr;
+      if (!inBounds(nc, nr) || getCell(nc, nr) === WALL) continue;
+      const idx = nr * COLS + nc;
+      if (dist[idx] !== -1) continue;          // déjà visité
+      dist[idx] = d; qc[tail] = nc; qr[tail++] = nr;
+    }
+  }
+
+  const ff = new Array(n).fill(null);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (getCell(c, r) === WALL) continue;
+      const d = dist[r * COLS + c];
+      if (d === -1) continue;                  // cellule inaccessible
+      let bestD = d, bdc = 0, bdr = 0;
+      for (const [dc, dr] of dirs8) {
+        const nc = c + dc, nr = r + dr;
+        if (!inBounds(nc, nr)) continue;
+        const nd = dist[nr * COLS + nc];
+        if (nd !== -1 && nd < bestD) { bestD = nd; bdc = dc; bdr = dr; }
+      }
+      if (bdc || bdr) { const m = Math.hypot(bdc, bdr); ff[r * COLS + c] = {x: bdc/m, y: bdr/m}; }
+    }
+  }
+  return { ff, dist };   // on retourne aussi les distances pour nearestExitId()
+}
+
+function rebuildFlowFields() {
+  const prevCount = flowFields.length; // nb de groupes au rebuild précédent
+  exitGroups = [];
+  const visited = new Uint8Array(COLS * ROWS);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      if (getCell(c, r) !== EXIT || visited[r*COLS+c]) continue;
+      const group = [], q = [{c, r}];
+      visited[r*COLS+c] = 1;
+      while (q.length) {
+        const cur = q.shift(); group.push(cur);
+        for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+          const nc = cur.c+dc, nr = cur.r+dr;
+          if (!inBounds(nc,nr) || getCell(nc,nr)!==EXIT || visited[nr*COLS+nc]) continue;
+          visited[nr*COLS+nc] = 1; q.push({c: nc, r: nr});
+        }
+      }
+      exitGroups.push({cells: group, id: exitGroups.length});
+    }
+  }
+  const results = exitGroups.map(eg => computeFlowField(eg.cells));
+  flowFields  = results.map(r => r.ff);
+  distFields  = results.map(r => r.dist);
+  flowDirty   = false;
+
+  // Réassigner les agents :
+  // – Si le nombre de sorties a changé depuis le dernier rebuild ET qu'il y avait
+  //   déjà des sorties (pas lors du chargement d'un preset depuis zéro), on passe
+  //   en mode "sortie la plus proche" et on vide les zones de spawn fixes.
+  if (exitGroups.length !== prevCount && prevCount > 0 && spawnZones.length > 0) {
+    const usedIds = new Set(spawnZones.map(z => z.exitId));
+    if (exitGroups.length !== usedIds.size) {
+      spawnZones = [];  // libère les zones fixes → nearestExitId pour tout le monde
+    }
+  }
+  if (spawnZones.length === 0) {
+    for (const a of agents) a.exitId = nearestExitId(a.x, a.y);
+  } else {
+    for (const a of agents) a.exitId = Math.min(a.exitId, Math.max(0, flowFields.length - 1));
+  }
+}
+
+// ── Sortie la plus proche (distance BFS réelle, pas euclidienne) ─
+function nearestExitId(x, y) {
+  if (distFields.length === 0) return 0;
+  const c = toCol(x), r = toRow(y);
+  if (!inBounds(c, r)) return 0;
+  let bestDist = Infinity, bestId = 0;
+  for (let i = 0; i < distFields.length; i++) {
+    const d = distFields[i][r * COLS + c];
+    if (d !== -1 && d < bestDist) { bestDist = d; bestId = i; }
+  }
+  return bestId;
+}
+
+// ── Spawning ─────────────────────────────────────────────────
+function pickSpawnZone() {
+  if (spawnZones.length > 0) return spawnZones[Math.floor(Math.random() * spawnZones.length)];
+  // Pas de zones explicites → position aléatoire + sortie la plus proche
+  for (let t = 0; t < 100; t++) {
+    const c = Math.floor(Math.random() * COLS), r = Math.floor(Math.random() * ROWS);
+    if (getCell(c, r) === EMPTY) {
+      const x = c * CELL + CELL / 2, y = r * CELL + CELL / 2;
+      return { x: c*CELL, y: r*CELL, w: CELL, h: CELL, exitId: nearestExitId(x, y) };
+    }
+  }
+  return { x: CELL, y: CELL, w: CELL, h: CELL, exitId: 0 };
+}
+
+function trySpawn(once = false) {
+  if (exitGroups.length === 0) return;
+  const limit = once ? 1 : targetCount;
+  let attempts = 0;
+  while (agents.length < targetCount && attempts++ < (once ? 40 : targetCount * 25)) {
+    const z = pickSpawnZone();
+    const sx = z.x + Math.random() * z.w, sy = z.y + Math.random() * z.h;
+    if (getCell(toCol(sx), toRow(sy)) !== EMPTY) continue;
+    if (agents.some(a => Math.hypot(a.x-sx, a.y-sy) < 12)) continue;
+    agents.push(new Agent(sx, sy, Math.min(z.exitId, exitGroups.length - 1)));
+    if (once) return;
+  }
+}
+
+// ── Dessin de la grille (offscreen) ──────────────────────────
+function rebuildGridCanvas() {
+  gridCtx.clearRect(0, 0, W, H);
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const v = getCell(c, r);
+      const x = c * CELL, y = r * CELL;
+      if (v === WALL) {
+        gridCtx.fillStyle = 'rgb(32,28,58)';
+        gridCtx.fillRect(x, y, CELL, CELL);
+        gridCtx.strokeStyle = 'rgba(55,48,88,0.5)';
+        gridCtx.lineWidth = 0.5;
+        gridCtx.strokeRect(x, y, CELL, CELL);
+      } else if (v === EXIT) {
+        gridCtx.fillStyle = 'rgba(40,180,90,0.18)';
+        gridCtx.fillRect(x-2, y-2, CELL+4, CELL+4);
+        gridCtx.fillStyle = 'rgba(55,220,110,0.85)';
+        gridCtx.fillRect(x, y, CELL, CELL);
+      }
+    }
+  }
+  gridDirty = false;
+}
+
+// ── Dessin du champ de flux (une couleur par groupe de sortie) ──
+const FLOW_COLORS = [
+  'rgba(255,255,255,0.10)',   // sortie 0 — blanc
+  'rgba(255,160,50,0.12)',    // sortie 1 — orange
+  'rgba(120,255,150,0.12)',   // sortie 2 — vert
+];
+function drawFlowField() {
+  for (let fi = 0; fi < flowFields.length; fi++) {
+    const ff = flowFields[fi];
+    if (!ff) continue;
+    ctx.strokeStyle = FLOW_COLORS[fi % FLOW_COLORS.length];
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let r = 0; r < ROWS; r += 3) {
+      for (let c = 0; c < COLS; c += 3) {
+        if (getCell(c, r) === WALL) continue;
+        const dir = ff[r * COLS + c];
+        if (!dir) continue;
+        const x = c*CELL + CELL/2, y = r*CELL + CELL/2;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + dir.x*CELL*1.4, y + dir.y*CELL*1.4);
+      }
+    }
+    ctx.stroke();
+  }
+}
+
+// ── Dessin pinceau ────────────────────────────────────────────
+function paintAt(mx, my, val) {
+  const cc = toCol(mx), cr = toRow(my), bs = brushSize;
+  if (val === 'pilier') {
+    const pr = bs * 2;
+    for (let dr = -pr; dr <= pr; dr++)
+      for (let dc = -pr; dc <= pr; dc++)
+        if (dc*dc + dr*dr <= pr*pr) setCell(cc+dc, cr+dr, WALL);
+  } else {
+    for (let dr = -(bs-1); dr < bs; dr++)
+      for (let dc = -(bs-1); dc < bs; dc++)
+        if (dc*dc + dr*dr < bs*bs) setCell(cc+dc, cr+dr, val);
+  }
+  gridDirty = true; flowDirty = true;
+}
+
+// ── Murs de bordure ───────────────────────────────────────────
+function borderWalls() {
+  for (let c = 0; c < COLS; c++) { setCell(c, 0, WALL); setCell(c, ROWS-1, WALL); }
+  for (let r = 0; r < ROWS; r++) { setCell(0, r, WALL); setCell(COLS-1, r, WALL); }
+}
+
+// ── Réinitialisation ─────────────────────────────────────────
+function clearAll() {
+  grid.fill(EMPTY); agents = []; spawnZones = []; exitGroups = []; flowFields = []; distFields = [];
+  gridDirty = true; flowDirty = false;
+  exitedTotal = 0; throughput = 0; tpLast = performance.now(); tpExited = 0; tpMax = 0.1;
+}
+
+// ── Scènes préréglées ─────────────────────────────────────────
+function presetRoom() {
+  clearAll(); borderWalls();
+  const midR = Math.floor(ROWS / 2);
+  for (let dr = -1; dr <= 1; dr++) { setCell(COLS-1, midR+dr, EXIT); setCell(COLS-2, midR+dr, EXIT); }
+  spawnZones = [{x: CELL*2, y: CELL*2, w: (COLS/3)*CELL, h: (ROWS-4)*CELL, exitId: 0}];
+  rebuildFlowFields(); trySpawn();
+  g('status-box').innerHTML = '🔵 Zone bleue = zone de départ des agents.<br>🟢 SORTIE = destination.<br><br>Les <b>flèches blanches</b> montrent le champ de flux (BFS) : chaque cellule "sait" dans quelle direction aller. Les <b>vecteurs jaunes</b> sur les agents = leur vitesse réelle.<br><br>Bleu → jaune → rouge = densité croissante.';
+}
+
+function presetCorridor() {
+  clearAll();
+  const top = Math.floor(ROWS * 0.35), bot = Math.floor(ROWS * 0.65);
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < top; r++) setCell(c, r, WALL);
+    for (let r = bot; r < ROWS; r++) setCell(c, r, WALL);
+  }
+  for (let r = top; r < bot; r++) { setCell(0, r, WALL); setCell(COLS-1, r, WALL); }
+  const midR = Math.floor((top + bot) / 2);
+  for (let dr = -2; dr <= 2; dr++) { setCell(COLS-1, midR+dr, EXIT); setCell(COLS-2, midR+dr, EXIT); }
+  spawnZones = [{x: CELL*2, y: top*CELL+CELL, w: (COLS/5)*CELL, h: (bot-top-2)*CELL, exitId: 0}];
+  rebuildFlowFields(); trySpawn();
+  g('status-box').innerHTML = 'Couloir étroit → un seul passage.<br><br>Regardez le champ de flux (flèches) converger vers la sortie. Quand trop d\'agents arrivent en même temps, l\'<b>arc de pression</b> bloque les corps : personne ne peut avancer. Essayez <b>Panique</b> pour amplifier ce phénomène.';
+}
+
+function presetBidir() {
+  clearAll();
+  const top = Math.floor(ROWS * 0.28), bot = Math.floor(ROWS * 0.72);
+  for (let c = 0; c < COLS; c++) {
+    for (let r = 0; r < top; r++) setCell(c, r, WALL);
+    for (let r = bot; r < ROWS; r++) setCell(c, r, WALL);
+  }
+  for (let r = top; r < bot; r++) { setCell(0, r, WALL); setCell(COLS-1, r, WALL); }
+  const midR = Math.floor((top + bot) / 2);
+  for (let dr = -2; dr <= 2; dr++) { setCell(0, midR+dr, EXIT); setCell(1, midR+dr, EXIT); }
+  for (let dr = -2; dr <= 2; dr++) { setCell(COLS-1, midR+dr, EXIT); setCell(COLS-2, midR+dr, EXIT); }
+  spawnZones = [
+    {x: (COLS*0.72)*CELL, y: (top+1)*CELL, w: (COLS*0.2)*CELL, h: (bot-top-2)*CELL, exitId: 0},
+    {x: CELL*2,           y: (top+1)*CELL, w: (COLS*0.2)*CELL, h: (bot-top-2)*CELL, exitId: 1},
+  ];
+  rebuildFlowFields(); trySpawn();
+  g('status-box').innerHTML = '🔵 Groupe bleu → sortie gauche.<br>🟠 Groupe orange → sortie droite.<br><br>Aucune règle de file n\'est programmée. Pourtant les deux flux s\'<b>auto-organisent en bandes</b> pour se croiser. C\'est de l\'émergence : l\'ordre naît des collisions locales.';
+}
+
+function presetTwoExits() {
+  clearAll(); borderWalls();
+  const midC = Math.floor(COLS / 2);
+  for (let dc = -2; dc <= 2; dc++) { setCell(midC+dc, 0, EXIT); setCell(midC+dc, 1, EXIT); }
+  for (let dc = -2; dc <= 2; dc++) { setCell(midC+dc, ROWS-1, EXIT); setCell(midC+dc, ROWS-2, EXIT); }
+  spawnZones = [
+    {x: CELL*2, y: CELL*2,        w: (COLS-4)*CELL, h: (ROWS/2-3)*CELL, exitId: 0},
+    {x: CELL*2, y: (ROWS/2)*CELL, w: (COLS-4)*CELL, h: (ROWS/2-3)*CELL, exitId: 1},
+  ];
+  rebuildFlowFields(); trySpawn();
+  g('status-box').innerHTML = 'Deux sorties opposées. Chaque moitié de salle pointe vers une sortie différente (voir champs de flux).<br><br>Dessinez un <b>mur</b> pour couper partiellement une sortie : le débit chute d\'un côté et monte de l\'autre. Comparez les <b>agents/s</b> en temps réel.';
+}
+
+// ── Boucle principale ─────────────────────────────────────────
+function loop(ts) {
+  requestAnimationFrame(loop);
+
+  ctx.fillStyle = 'rgb(12,11,28)';
+  ctx.fillRect(0, 0, W, H);
+
+  if (gridDirty)  rebuildGridCanvas();
+  if (flowDirty)  rebuildFlowFields();
+
+  ctx.drawImage(gridCvs, 0, 0);
+
+  if (showFlow) drawFlowField();
+
+  // Zones de spawn (pointillés bleus)
+  if (spawnZones.length > 0) {
+    ctx.save();
+    ctx.setLineDash([4, 5]);
+    ctx.lineWidth = 1.5;
+    for (const z of spawnZones) {
+      ctx.strokeStyle = z.exitId === 1 ? 'rgba(255,160,60,0.35)' : 'rgba(74,158,255,0.35)';
+      ctx.strokeRect(z.x, z.y, z.w, z.h);
+    }
+    ctx.restore();
+  }
+
+  if (simOn && exitGroups.length > 0) {
+    spatialGrid.clear();
+    for (const a of agents) spatialGrid.insert(a);
+    for (const a of agents) a.update(spatialGrid.nearby(a, 55));
+    const before = agents.length;
+    agents = agents.filter(a => !a.atExit());
+    exitedTotal += before - agents.length;
+    if (agents.length < targetCount) trySpawn(true);
+  }
+
+  for (const a of agents) a.draw();
+
+  // Labels SORTIE sur chaque groupe de sortie
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  exitGroups.forEach((eg) => {
+    const cx = eg.cells.reduce((s,c) => s + c.c, 0) / eg.cells.length * CELL + CELL/2;
+    const cy = eg.cells.reduce((s,c) => s + c.r, 0) / eg.cells.length * CELL + CELL/2;
+    ctx.font = 'bold 11px Segoe UI, sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillText('SORTIE', cx + 1, cy - 11);
+    ctx.fillStyle = 'rgba(80,240,130,0.95)';
+    ctx.fillText('SORTIE', cx, cy - 12);
+    // Flèche d'entrée pointant vers la sortie depuis l'intérieur
+    const ff = flowFields[eg.id];
+    if (ff) {
+      const idx = Math.round(cy / CELL) * COLS + Math.round(cx / CELL);
+      const dir = ff[idx];
+      if (dir) {
+        const ax = cx - dir.x * 14, ay = cy - dir.y * 14;
+        ctx.strokeStyle = 'rgba(80,240,130,0.7)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(cx, cy); ctx.stroke();
+      }
+    }
+  });
+  ctx.restore();
+
+  // Prévisualisation pinceau
+  if (mouseX > 0) {
+    ctx.setLineDash([3, 4]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, brushSize * CELL * 1.1, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Stats (toutes les secondes)
+  const now = performance.now();
+  if (now - tpLast > 1000) {
+    throughput = (exitedTotal - tpExited) / ((now - tpLast) / 1000);
+    tpExited = exitedTotal; tpLast = now;
+    if (throughput > tpMax) tpMax = throughput;
+  }
+  g('s-agents').textContent  = agents.length;
+  g('s-exited').textContent  = exitedTotal;
+  g('s-tp').textContent      = throughput.toFixed(1);
+  if (exitGroups.length > 1) {
+    const dots = ['🔵','🟠','🟢','🟣'];
+    const cnt = {};
+    for (const a of agents) cnt[a.exitId] = (cnt[a.exitId]||0)+1;
+    g('s-exits-detail').innerHTML = exitGroups.map((eg,i) =>
+      `${dots[i%dots.length]} Sortie ${i+1} : <b style="color:#9999cc">${cnt[i]||0}</b> agents`
+    ).join('<br>');
+  } else { g('s-exits-detail').innerHTML = ''; }
+  const pct = Math.min(100, throughput / Math.max(tpMax, 0.1) * 100);
+  g('tp-bar').style.width      = pct + '%';
+  g('tp-bar').style.background = panicMode ? '#ff5050' : '#4a9eff';
+
+  // FPS
+  fpsCount++;
+  if (now - fpsLast > 700) {
+    const fps = Math.round(fpsCount / ((now - fpsLast) / 1000));
+    fpsCount = 0; fpsLast = now;
+    g('counter').textContent = `${agents.length} agents · ${fps} fps`;
+  }
+}
+
+// ── Redimensionnement ─────────────────────────────────────────
+function resize() {
+  const wrap = document.getElementById('canvas-wrap');
+  W = canvas.width  = gridCvs.width  = wrap.offsetWidth;
+  H = canvas.height = gridCvs.height = wrap.offsetHeight;
+  COLS = Math.floor(W / CELL);
+  ROWS = Math.floor(H / CELL);
+  grid = new Uint8Array(COLS * ROWS);
+  spatialGrid = new SpatialGrid(55, W, H);
+  gridDirty = true;
+  presetRoom();
+}
+
+// ── Souris ────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  drawing = true; paint(e.offsetX, e.offsetY);
+});
+canvas.addEventListener('mousemove', e => {
+  mouseX = e.offsetX; mouseY = e.offsetY;
+  if (drawing) paint(e.offsetX, e.offsetY);
+});
+canvas.addEventListener('mouseup',    () => { drawing = false; });
+canvas.addEventListener('mouseleave', () => { drawing = false; mouseX = -999; });
+
+function paint(mx, my) {
+  const val = tool === 'wall' ? WALL : tool === 'exit' ? EXIT : tool === 'erase' ? EMPTY : 'pilier';
+  paintAt(mx, my, val);
+}
+
+// ── UI ────────────────────────────────────────────────────────
+['wall','exit','pilier','erase'].forEach(t => {
+  g(`tool-${t}`).addEventListener('click', () => {
+    tool = t;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    g(`tool-${t}`).classList.add('active');
+    const wrap = document.getElementById('canvas-wrap');
+    wrap.className = t === 'erase' ? 'cur-erase' : '';
+  });
+});
+
+g('s-brush').addEventListener('input', () => { brushSize = +g('s-brush').value; g('v-brush').textContent = brushSize; });
+g('s-count').addEventListener('input', () => { targetCount = +g('s-count').value; g('v-count').textContent = targetCount; });
+g('s-speed').addEventListener('input', () => {
+  if (!panicMode) speedBase = +g('s-speed').value / 10;
+  g('v-speed').textContent = speedBase.toFixed(1);
+});
+
+g('tog-run').addEventListener('change', () => { simOn = g('tog-run').checked; });
+
+g('btn-clearall').addEventListener('click', clearAll);
+g('preset-room').addEventListener('click', presetRoom);
+g('preset-corridor').addEventListener('click', presetCorridor);
+g('preset-bidir').addEventListener('click', presetBidir);
+g('preset-two').addEventListener('click', presetTwoExits);
+
+g('btn-panic').addEventListener('click', () => {
+  panicMode = !panicMode;
+  g('btn-panic').classList.toggle('active-red', panicMode);
+  g('btn-panic').textContent = panicMode ? '⚡ Désactiver la panique' : '⚡ Faster-is-Slower (panique)';
+  speedBase = panicMode ? 5.5 : +g('s-speed').value / 10;
+  g('v-speed').textContent = speedBase.toFixed(1);
+  if (panicMode) g('status-box').textContent = '⚡ Faster-is-Slower (Helbing, 1995). La précipitation crée des arcs de pression aux sorties. Le débit diminue : chacun bloque l\'autre en voulant passer en premier.';
+});
+
+g('btn-pilier-auto').addEventListener('click', () => {
+  if (exitGroups.length === 0) return;
+  const eg = exitGroups[0];
+  const sc = eg.cells.reduce((s,c) => s+c.c, 0) / eg.cells.length;
+  const sr = eg.cells.reduce((s,c) => s+c.r, 0) / eg.cells.length;
+  const dc = Math.sign(COLS/2 - sc) || 1, dr = Math.sign(ROWS/2 - sr) || 1;
+  const pc = Math.round(sc + dc * 8), pr = Math.round(sr + dr * 8);
+  const prad = 3;
+  for (let ddr = -prad; ddr <= prad; ddr++)
+    for (let ddc = -prad; ddc <= prad; ddc++)
+      if (ddc*ddc+ddr*ddr <= prad*prad) setCell(pc+ddc, pr+ddr, WALL);
+  gridDirty = true; flowDirty = true;
+  g('status-box').textContent = '🔵 Pilier fluidifiant placé (Helbing, 1992). L\'obstacle devant la sortie divise l\'arc de pression et brise le bouchon compact. Paradoxalement, le débit augmente.';
+});
+
+g('btn-respawn').addEventListener('click', () => {
+  rebuildFlowFields(); agents = [];
+  trySpawn();
+  exitedTotal = 0; throughput = 0; tpLast = performance.now(); tpExited = 0; tpMax = 0.1;
+});
+
+g('tog-pressure').addEventListener('change', () => {
+  showPressure = g('tog-pressure').checked;
+  g('legend-pressure').style.display = showPressure ? '' : 'none';
+  g('legend-speed').style.display    = showPressure ? 'none' : '';
+});
+g('tog-vec').addEventListener('change',      () => { showVectors  = g('tog-vec').checked; });
+g('tog-flow').addEventListener('change',     () => { showFlow     = g('tog-flow').checked; });
+
+// ── Init ──────────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+resize();
+// Synchroniser les toggles avec les valeurs initiales
+g('tog-vec').checked      = showVectors;
+g('tog-flow').checked     = showFlow;
+g('tog-pressure').checked = showPressure;
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
