@@ -396,7 +396,7 @@
   <!-- INTERACTIONS -->
   <div class="section">
     <div class="section-label">Interactions</div>
-    <button class="btn" id="btn-pred">🦅 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span></button>
+    <button class="btn" id="btn-pred">🐦 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span></button>
     <button class="btn" id="btn-obs">🪨 Mode placement d'obstacles</button>
     <div id="obs-controls" style="display:none">
       <div class="slider-row" style="margin-top:2px;">
@@ -1115,7 +1115,7 @@ function updateStatus(params) {
   } else if (off.length > 0) {
     txt = `Règle${off.length > 1 ? 's' : ''} désactivée${off.length > 1 ? 's' : ''} : ${off.join(', ')}. Observez l'effet sur la formation.`;
   } else if (predMode) {
-    txt = '🦅 Prédateur actif — approchez le curseur pour déclencher le vortex défensif (Ian Couzin, 2001).';
+    txt = '🐦 Prédateur actif — approchez le curseur pour déclencher le vortex défensif (Ian Couzin, 2001).';
   } else if (obsMode) {
     txt = '🪨 Mode obstacles — clic gauche pour poser, clic droit pour supprimer.';
   } else if (followMode && selected >= 0) {
@@ -1188,8 +1188,8 @@ function setupUI() {
     predMode = !predMode;
     g('btn-pred').classList.toggle('active-red', predMode);
     g('btn-pred').innerHTML = predMode
-      ? '🦅 Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
-      : '🦅 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
+      ? '🐦 Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
+      : '🐦 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
   });
 
   g('btn-obs').addEventListener('click', () => {
@@ -1239,7 +1239,7 @@ function setupUI() {
     followMode = false; cam.x = 0; cam.y = 0; cam.zoom = 1;
     g('tog-follow').checked = false;
     g('btn-pred').classList.remove('active-red');
-    g('btn-pred').textContent = '🦅 Activer le prédateur (souris)';
+    g('btn-pred').innerHTML = '🐦 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
     g('btn-obs').classList.remove('active-purple');
     g('btn-obs').textContent = "🪨 Mode placement d'obstacles";
     g('obs-controls').style.display = 'none';
