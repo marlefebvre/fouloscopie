@@ -396,7 +396,7 @@
   <!-- INTERACTIONS -->
   <div class="section">
     <div class="section-label">Interactions</div>
-    <button class="btn" id="btn-pred"><span id="pred-dot" style="display:inline-block;width:8px;height:8px;background:#ff5a5a;border-radius:50%;margin-right:7px;vertical-align:middle;opacity:0.5"></span>Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span></button>
+    <button class="btn" id="btn-pred">🦅 Activer le prédateur <span style="color:#555577;font-size:0.72rem">[P]</span></button>
     <button class="btn" id="btn-obs">🪨 Mode placement d'obstacles</button>
     <div id="obs-controls" style="display:none">
       <div class="slider-row" style="margin-top:2px;">
@@ -794,6 +794,17 @@ function makeStarTexture() {
   return PIXI.Texture.from(c);
 }
 
+function makeEagleTexture() {
+  const c = document.createElement('canvas');
+  c.width = 80; c.height = 80;
+  const ctx = c.getContext('2d');
+  ctx.font = '64px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('\uD83E\uDD85', 40, 42); // 🦅 U+1F985
+  return PIXI.Texture.from(c);
+}
+
 function makeBirdTexture() {
   const c = document.createElement('canvas');
   c.width = 32; c.height = 24;
@@ -874,6 +885,12 @@ world.addChild(obsGfx);
 world.addChild(trailGfx);
 world.addChild(predGfx);
 world.addChild(zoneGfx);
+
+// Eagle sprite (prédateur)
+const eagleSprite = new PIXI.Sprite(makeEagleTexture());
+eagleSprite.anchor.set(0.5);
+eagleSprite.visible = false;
+world.addChild(eagleSprite);
 
 // Bird ParticleContainer
 const birdTexture   = makeBirdTexture();
@@ -1188,8 +1205,8 @@ function setupUI() {
     predMode = !predMode;
     g('btn-pred').classList.toggle('active-red', predMode);
     g('btn-pred').innerHTML = predMode
-      ? '<span style="display:inline-block;width:8px;height:8px;background:#ff5a5a;border-radius:50%;margin-right:7px;vertical-align:middle;opacity:1"></span>Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
-      : '<span style="display:inline-block;width:8px;height:8px;background:#ff5a5a;border-radius:50%;margin-right:7px;vertical-align:middle;opacity:0.5"></span>Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
+      ? '🦅 Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
+      : '🦅 Activer le prédateur <span style="color:#555577;font-size:0.72rem">[P]</span>';
   });
 
   g('btn-obs').addEventListener('click', () => {
@@ -1239,7 +1256,7 @@ function setupUI() {
     followMode = false; cam.x = 0; cam.y = 0; cam.zoom = 1;
     g('tog-follow').checked = false;
     g('btn-pred').classList.remove('active-red');
-    g('btn-pred').innerHTML = '<span style="display:inline-block;width:8px;height:8px;background:#ff5a5a;border-radius:50%;margin-right:7px;vertical-align:middle;opacity:0.5"></span>Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
+    g('btn-pred').innerHTML = '🦅 Activer le prédateur <span style="color:#555577;font-size:0.72rem">[P]</span>';
     g('btn-obs').classList.remove('active-purple');
     g('btn-obs').textContent = "🪨 Mode placement d'obstacles";
     g('obs-controls').style.display = 'none';
@@ -1411,11 +1428,16 @@ app.ticker.add((delta) => {
   predGfx.clear();
   if (predActive) {
     const [wx, wy] = screenToWorld(mouseScreenX, mouseScreenY);
-    predGfx.lineStyle(1, 0xff5050, 0.22);
+    predGfx.lineStyle(1, 0xff5050, 0.18);
     predGfx.drawCircle(wx, wy, 160);
-    predGfx.lineStyle(1, 0xff5050, 0.12);
+    predGfx.lineStyle(1, 0xff5050, 0.08);
     predGfx.drawCircle(wx, wy, 320);
-    predGfx.endFill();
+    eagleSprite.visible = true;
+    eagleSprite.x = wx;
+    eagleSprite.y = wy;
+    eagleSprite.scale.set(1.2 / cam.zoom); // taille constante à l'écran
+  } else {
+    eagleSprite.visible = false;
   }
 
   // 12. Draw perception zones for selected boid
