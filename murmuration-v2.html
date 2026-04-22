@@ -229,6 +229,41 @@
     }
     #phi-bar { height: 100%; width: 0%; border-radius: 2px; transition: width 0.4s, background 0.4s; }
 
+    /* ── HUD BUTTONS (canvas overlay) ── */
+    #hud-btns {
+      position: absolute;
+      top: 14px; right: 18px;
+      display: flex; gap: 6px;
+      z-index: 10;
+    }
+    .hud-btn {
+      width: 30px; height: 30px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 7px;
+      color: rgba(255,255,255,0.3);
+      font-size: 1rem; line-height: 1;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;
+    }
+    .hud-btn:hover {
+      background: rgba(255,255,255,0.11);
+      color: rgba(255,255,255,0.7);
+      border-color: rgba(255,255,255,0.18);
+    }
+    .hud-btn.pred-on {
+      background: rgba(255,80,80,0.15);
+      border-color: rgba(255,80,80,0.3);
+      color: #ff7070;
+    }
+    .hud-btn.menu-on {
+      background: rgba(255,200,50,0.12);
+      border-color: rgba(255,200,50,0.25);
+      color: #ffd050;
+    }
+
     /* ── COUNTER ── */
     #counter {
       font-size: 0.68rem; color: #333355;
@@ -243,6 +278,10 @@
 <div id="canvas-wrap">
   <div id="canvas-hint">Clic = inspecter · Molette = zoom · Double-clic = réinitialiser · <kbd style="font-family:inherit">C</kbd> = cinéma</div>
   <div id="obs-hint">🪨 Mode obstacles actif — Clic gauche : ajouter · Clic droit : supprimer</div>
+  <div id="hud-btns">
+    <button class="hud-btn" id="hud-pred" title="Prédateur [P]">🦅</button>
+    <button class="hud-btn menu-on" id="hud-menu" title="Panneau [C]">☰</button>
+  </div>
 </div>
 
 <div id="cinema-hint">Appuyez sur C pour quitter le mode cinéma</div>
@@ -988,6 +1027,7 @@ function toggleCinema() {
   g('btn-cinema').innerHTML = cinemaMode
     ? '🎬 Quitter le cinéma <span style="color:#888;font-size:0.72rem">[C]</span>'
     : '🎬 Mode cinéma <span style="color:#555577;font-size:0.72rem">[C]</span>';
+  g('hud-menu').classList.toggle('menu-on', cinemaMode);
   setTimeout(onResize, 420);
 }
 
@@ -1092,14 +1132,9 @@ function drawPolarizationGauge(phi) {
 
   // "0" and "1" labels drawn via text objects below; phi value via phiText
 
-  // If cinema mode show FPS and hint
-  if (cinemaMode) {
-    cinHint.visible = true;
-    fpsText.visible = true;
-  } else {
-    cinHint.visible = false;
-    fpsText.visible = false;
-  }
+  // FPS visible en cinéma uniquement (cinHint remplacé par boutons HTML)
+  cinHint.visible = false;
+  fpsText.visible = cinemaMode;
 
   // Zoom indicator (via hudGfx too? use a quick text hack via Graphics rect)
   // Actually handled via existing PIXI.Text objects — skip additional graphics here
@@ -1207,6 +1242,7 @@ function setupUI() {
     g('btn-pred').innerHTML = predMode
       ? '🦅 Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
       : '🦅 Activer le prédateur <span style="color:#555577;font-size:0.72rem">[P]</span>';
+    g('hud-pred').classList.toggle('pred-on', predMode);
   });
 
   g('btn-obs').addEventListener('click', () => {
@@ -1234,6 +1270,9 @@ function setupUI() {
     borderWalls = g('tog-walls').checked;
   });
 
+  g('hud-pred').addEventListener('click', () => g('btn-pred').click());
+  g('hud-menu').addEventListener('click', toggleCinema);
+
   g('btn-cinema').addEventListener('click', toggleCinema);
 
   g('btn-scatter').addEventListener('click', () => {
@@ -1257,6 +1296,7 @@ function setupUI() {
     g('tog-follow').checked = false;
     g('btn-pred').classList.remove('active-red');
     g('btn-pred').innerHTML = '🦅 Activer le prédateur <span style="color:#555577;font-size:0.72rem">[P]</span>';
+    g('hud-pred').classList.remove('pred-on');
     g('btn-obs').classList.remove('active-purple');
     g('btn-obs').textContent = "🪨 Mode placement d'obstacles";
     g('obs-controls').style.display = 'none';
