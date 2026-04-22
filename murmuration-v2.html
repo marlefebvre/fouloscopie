@@ -310,8 +310,8 @@
   <div class="section">
     <div class="section-label">Simulation</div>
     <div class="slider-row">
-      <div class="slider-meta"><span class="slider-name">Nombre d'agents</span><span class="slider-val" id="v-count">2000</span></div>
-      <input type="range" id="s-count" min="5" max="3000" value="2000">
+      <div class="slider-meta"><span class="slider-name">Nombre d'agents</span><span class="slider-val" id="v-count">2500</span></div>
+      <input type="range" id="s-count" min="5" max="3000" value="2500">
     </div>
     <div class="slider-row">
       <div class="slider-meta"><span class="slider-name">Vitesse maximale</span><span class="slider-val" id="v-speed">3.0</span></div>
@@ -396,7 +396,7 @@
   <!-- INTERACTIONS -->
   <div class="section">
     <div class="section-label">Interactions</div>
-    <button class="btn" id="btn-pred">🦅 Activer le prédateur (souris)</button>
+    <button class="btn" id="btn-pred">🦅 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span></button>
     <button class="btn" id="btn-obs">🪨 Mode placement d'obstacles</button>
     <div id="obs-controls" style="display:none">
       <div class="slider-row" style="margin-top:2px;">
@@ -751,21 +751,33 @@ function makeSkyTexture(W, H) {
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
+
+  // Dégradé crépuscule — du bleu acier en haut à l'orange brûlé en bas
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0,    'rgb(3,3,14)');
-  grad.addColorStop(0.50, 'rgb(7,5,22)');
-  grad.addColorStop(0.72, 'rgb(18,6,20)');
-  grad.addColorStop(0.88, 'rgb(48,10,6)');
-  grad.addColorStop(1,    'rgb(75,18,4)');
+  grad.addColorStop(0,    'rgb(52, 78, 118)');   // haut : bleu acier foncé
+  grad.addColorStop(0.20, 'rgb(92, 138, 172)');  // bleu clair
+  grad.addColorStop(0.42, 'rgb(155, 140, 98)');  // transition dorée poussiéreuse
+  grad.addColorStop(0.62, 'rgb(208, 112, 38)');  // orange vif
+  grad.addColorStop(0.82, 'rgb(210, 78, 18)');   // orange profond
+  grad.addColorStop(1,    'rgb(175, 52, 10)');   // rouge-orange horizon
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
-  // Horizon glow
-  const glow = ctx.createRadialGradient(W / 2, H, 10, W / 2, H, W * 0.65);
-  glow.addColorStop(0,   'rgba(130,50,10,0.22)');
-  glow.addColorStop(0.5, 'rgba(80,20,5,0.08)');
-  glow.addColorStop(1,   'rgba(0,0,0,0)');
+
+  // Halo chaud sur l'horizon (centre bas)
+  const glow = ctx.createRadialGradient(W * 0.5, H * 0.88, 0, W * 0.5, H * 0.88, W * 0.52);
+  glow.addColorStop(0,   'rgba(255, 175, 55, 0.28)');
+  glow.addColorStop(0.35,'rgba(230, 115, 25, 0.14)');
+  glow.addColorStop(1,   'rgba(0, 0, 0, 0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
+
+  // Légère luminosité diffuse sur le tiers supérieur (atmosphère)
+  const atmo = ctx.createLinearGradient(0, 0, 0, H * 0.45);
+  atmo.addColorStop(0,   'rgba(160, 195, 225, 0.08)');
+  atmo.addColorStop(1,   'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = atmo;
+  ctx.fillRect(0, 0, W, H);
+
   return PIXI.Texture.from(c);
 }
 
@@ -811,7 +823,7 @@ const wrap = document.getElementById('canvas-wrap');
 const app = new PIXI.Application({
   width: wrap.offsetWidth,
   height: wrap.offsetHeight,
-  backgroundColor: 0x03030e,
+  backgroundColor: 0x04030e,
   antialias: false,
   powerPreference: 'high-performance',
   resolution: Math.min(window.devicePixelRatio || 1, 2),
@@ -1032,6 +1044,7 @@ app.view.addEventListener('contextmenu', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'c' || e.key === 'C') toggleCinema();
   if (e.key === 'Escape' && cinemaMode) toggleCinema();
+  if (e.key === 'p' || e.key === 'P') g('btn-pred').click();
 });
 
 window.addEventListener('resize', onResize);
@@ -1174,7 +1187,9 @@ function setupUI() {
   g('btn-pred').addEventListener('click', () => {
     predMode = !predMode;
     g('btn-pred').classList.toggle('active-red', predMode);
-    g('btn-pred').textContent = predMode ? '🦅 Désactiver le prédateur' : '🦅 Activer le prédateur (souris)';
+    g('btn-pred').innerHTML = predMode
+      ? '🦅 Désactiver le prédateur <span style="color:#888;font-size:0.72rem">[P]</span>'
+      : '🦅 Activer le prédateur (souris) <span style="color:#555577;font-size:0.72rem">[P]</span>';
   });
 
   g('btn-obs').addEventListener('click', () => {
@@ -1299,12 +1314,14 @@ app.ticker.add((delta) => {
     }
   }
 
-  // 6. Sky toggle
+  // 6. Sky toggle (étoiles uniquement en mode nuit = ciel désactivé)
   skySprite.visible = params.sky;
-  starContainer.visible = params.sky;
+  starContainer.visible = !params.sky;
 
   // 7. Sync bird sprites
-  const TINT_SEP = 0xff5a5a, TINT_ALI = 0x5ad25a, TINT_COH = 0x4a9eff, TINT_DEF = 0xc8d2f0;
+  const TINT_SEP = 0xff5a5a, TINT_ALI = 0x5ad25a, TINT_COH = 0x4a9eff;
+  // Silhouette sombre sur ciel crépuscule, clair sur fond nuit
+  const TINT_DEF = params.sky ? 0x0d0d18 : 0xc8d2f0;
   const TINT_SEL = 0xffe63c;
   for (let i = 0; i < MAX_N; i++) {
     const sp = sprites[i];
