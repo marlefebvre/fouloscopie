@@ -229,6 +229,23 @@
     }
     #phi-bar { height: 100%; width: 0%; border-radius: 2px; transition: width 0.4s, background 0.4s; }
 
+    /* ── PRESETS ── */
+    .preset-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+    .preset-btn {
+      padding: 5px 11px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #6666aa; border-radius: 20px; cursor: pointer;
+      font-size: 0.74rem; font-family: inherit;
+      transition: all 0.18s;
+    }
+    .preset-btn:hover { background: rgba(255,255,255,0.09); color: #9999cc; }
+    .preset-btn.active {
+      background: rgba(74,158,255,0.15);
+      border-color: rgba(74,158,255,0.35);
+      color: #4a9eff; font-weight: 600;
+    }
+
     /* ── HUD BUTTONS (canvas overlay) ── */
     #hud-btns {
       position: absolute;
@@ -290,6 +307,20 @@
   <div class="panel-header">
     <a href="index.html" class="back-btn">← Accueil</a>
     <span class="panel-title">🐦 Murmuration <span class="badge-gpu">V2 · GPU</span></span>
+  </div>
+
+  <!-- PRESETS -->
+  <div class="section">
+    <div class="section-label">Presets comportementaux</div>
+    <div class="preset-grid">
+      <button class="preset-btn active" data-preset="etourneaux">🐦 Étourneaux</button>
+      <button class="preset-btn" data-preset="poissons">🐟 Banc de poissons</button>
+      <button class="preset-btn" data-preset="moucherons">🦟 Moucherons</button>
+      <button class="preset-btn" data-preset="turbulences">🌪 Turbulences</button>
+    </div>
+    <div id="preset-desc" style="font-size:0.7rem;color:#444466;line-height:1.5;margin-top:8px;">
+      Murmuration classique — séparation, alignement et cohésion équilibrés.
+    </div>
   </div>
 
   <!-- RÈGLES -->
@@ -1200,6 +1231,62 @@ function updateSelectedInfo() {
     `<em style="color:#555577">Les cercles colorés montrent ses trois rayons de perception.</em>`;
 }
 
+// ── Presets ───────────────────────────────────────────────────
+const PRESETS = {
+  etourneaux: {
+    desc: 'Murmuration classique — séparation, alignement et cohésion équilibrés.',
+    sepOn: true,  aliOn: true,  cohOn: true,
+    sepR: 30,  sepW: 15,   // 1.5
+    aliR: 60,  aliW: 10,   // 1.0
+    cohR: 100, cohW: 10,   // 1.0
+    speed: 15,             // 3.0
+  },
+  poissons: {
+    desc: 'Banc très synchronisé — forte répulsion rapprochée et alignement dominant.',
+    sepOn: true,  aliOn: true,  cohOn: true,
+    sepR: 18,  sepW: 25,   // 2.5 — éviter collisions serrées
+    aliR: 45,  aliW: 28,   // 2.8 — copier la direction
+    cohR: 65,  cohW:  7,   // 0.7 — cohésion faible (alignement suffit)
+    speed: 10,             // 2.0
+  },
+  moucherons: {
+    desc: 'Essaim dense autour d\'un centre — alignement quasi nul, cohésion très forte.',
+    sepOn: true,  aliOn: true,  cohOn: true,
+    sepR: 22,  sepW: 12,   // 1.2
+    aliR: 30,  aliW:  2,   // 0.2 — direction aléatoire
+    cohR: 220, cohW: 28,   // 2.8 — tous attirés vers le centre
+    speed:  8,             // 1.6
+  },
+  turbulences: {
+    desc: 'Régime chaotique — vitesse élevée, règles faibles, formations instables.',
+    sepOn: true,  aliOn: true,  cohOn: true,
+    sepR: 40,  sepW:  6,   // 0.6
+    aliR: 90,  aliW:  4,   // 0.4
+    cohR: 120, cohW:  3,   // 0.3
+    speed: 28,             // 5.6
+  },
+};
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  if (!p) return;
+  const set = (id, val, vid, fmt) => { g(id).value = val; g(vid).textContent = fmt(val); };
+  set('sep-r', p.sepR, 'v-sep-r', v => v);
+  set('sep-w', p.sepW, 'v-sep-w', v => (v/10).toFixed(1));
+  set('ali-r', p.aliR, 'v-ali-r', v => v);
+  set('ali-w', p.aliW, 'v-ali-w', v => (v/10).toFixed(1));
+  set('coh-r', p.cohR, 'v-coh-r', v => v);
+  set('coh-w', p.cohW, 'v-coh-w', v => (v/10).toFixed(1));
+  set('s-speed', p.speed, 'v-speed', v => (v/5).toFixed(1));
+  g('tog-sep').checked = p.sepOn; g('block-sep').classList.toggle('off', !p.sepOn);
+  g('tog-ali').checked = p.aliOn; g('block-ali').classList.toggle('off', !p.aliOn);
+  g('tog-coh').checked = p.cohOn; g('block-coh').classList.toggle('off', !p.cohOn);
+  document.querySelectorAll('.preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === key)
+  );
+  g('preset-desc').textContent = p.desc;
+}
+
 // ── UI setup ──────────────────────────────────────────────────────
 function setupUI() {
   [
@@ -1269,6 +1356,10 @@ function setupUI() {
   g('tog-walls').addEventListener('change', () => {
     borderWalls = g('tog-walls').checked;
   });
+
+  document.querySelectorAll('.preset-btn').forEach(btn =>
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset))
+  );
 
   g('hud-pred').addEventListener('click', () => g('btn-pred').click());
   g('hud-menu').addEventListener('click', toggleCinema);
