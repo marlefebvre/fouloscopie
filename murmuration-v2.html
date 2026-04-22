@@ -1435,7 +1435,7 @@ app.ticker.add((delta) => {
     eagleSprite.visible = true;
     eagleSprite.x = wx;
     eagleSprite.y = wy;
-    eagleSprite.scale.set(1.2 / cam.zoom); // taille constante à l'écran
+    eagleSprite.scale.set(1.0 / birdScaleDivisor); // suit la taille des oiseaux
   } else {
     eagleSprite.visible = false;
   }
