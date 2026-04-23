@@ -26,7 +26,7 @@ const SEP_R  = 24,  SEP_W = 2.2;
 const ALI_R  = 85,  ALI_W = 2.0;
 const COH_R  = 110, COH_W = 0.7;
 const SPEED  = 2.8;
-const TRAIL_LEN = 28;
+const BIRD_SCALE = 0.55;
 
 // ── SoA physique ─────────────────────────────────────────────────
 const posX = new Float32Array(MAX_N);
@@ -35,7 +35,6 @@ const velX = new Float32Array(MAX_N);
 const velY = new Float32Array(MAX_N);
 const accX = new Float32Array(MAX_N);
 const accY = new Float32Array(MAX_N);
-const trails = Array.from({ length: MAX_N }, () => []);
 let N = MAX_N;
 
 // ── Grille spatiale ───────────────────────────────────────────────
@@ -104,8 +103,6 @@ app.stage.addChild(skySprite);
 const world = new PIXI.Container();
 app.stage.addChild(world);
 
-const trailGfx = new PIXI.Graphics();
-world.addChild(trailGfx);
 
 const birdContainer = new PIXI.ParticleContainer(MAX_N, {
   tint: true, position: true, rotation: true, scale: true, alpha: false,
@@ -117,6 +114,7 @@ const sprites = [];
 for (let i = 0; i < MAX_N; i++) {
   const sp = new PIXI.Sprite(birdTex);
   sp.anchor.set(0.5);
+  sp.scale.set(BIRD_SCALE);
   birdContainer.addChild(sp);
   sprites.push(sp);
 }
@@ -195,12 +193,6 @@ function stepPhysics() {
     if (posY[i] > H+pad) posY[i] = -pad; if (posY[i] < -pad) posY[i] = H+pad;
   }
 
-  // Trails
-  for (let i = 0; i < N; i++) {
-    const t = trails[i];
-    t.push(posX[i], posY[i]);
-    while (t.length > TRAIL_LEN * 2) { t.shift(); t.shift(); }
-  }
 }
 
 // ── Ticker ────────────────────────────────────────────────────────
@@ -220,19 +212,6 @@ app.ticker.add(() => {
     sp.x = posX[i]; sp.y = posY[i];
     sp.rotation = Math.atan2(velY[i], velX[i]) + Math.PI * 0.5;
     sp.tint = 0x0d0d18; // silhouette sombre sur ciel crépuscule
-  }
-
-  // Traînées
-  trailGfx.clear();
-  for (let i = 0; i < N; i++) {
-    const t = trails[i], pts = t.length / 2;
-    if (pts < 2) continue;
-    for (let k = 1; k < pts; k++) {
-      const frac = k / pts;
-      trailGfx.lineStyle(frac * 1.8, 0x0a0a16, frac * frac * 0.45);
-      trailGfx.moveTo(t[(k-1)*2], t[(k-1)*2+1]);
-      trailGfx.lineTo(t[k*2],     t[k*2+1]);
-    }
   }
 
   // Scintillement subtil du ciel (variation de luminosité très légère)
