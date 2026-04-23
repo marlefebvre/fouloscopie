@@ -170,6 +170,14 @@ function stepPhysics() {
     if (aliCnt > 0) { const [fx,fy] = steer(aliX/aliCnt, aliY/aliCnt, ALI_W, f);   accX[i]+=fx; accY[i]+=fy; }
     if (cohCnt > 0) { const [fx,fy] = steer(cohX/cohCnt-px, cohY/cohCnt-py, COH_W, f*0.6); accX[i]+=fx; accY[i]+=fy; }
 
+    // Répulsion des bords
+    const margin = Math.min(W, H) * 0.18;
+    const maxF = SPEED * 0.13;
+    if (px < margin)        accX[i] += maxF * Math.pow(1 - px/margin, 2);
+    if (px > W - margin)    accX[i] -= maxF * Math.pow(1 - (W-px)/margin, 2);
+    if (py < margin)        accY[i] += maxF * Math.pow(1 - py/margin, 2);
+    if (py > H - margin)    accY[i] -= maxF * Math.pow(1 - (H-py)/margin, 2);
+
     // Fuite douce de la souris
     if (mActive) {
       const dpx = px-mX, dpy = py-mY, d2 = dpx*dpx+dpy*dpy, R = 200;
@@ -188,9 +196,8 @@ function stepPhysics() {
     if (vm > SPEED) { const r = SPEED/vm; velX[i]*=r; velY[i]*=r; }
     posX[i] += velX[i]; posY[i] += velY[i];
     accX[i] = 0; accY[i] = 0;
-    const pad = 12;
-    if (posX[i] > W+pad) posX[i] = -pad; if (posX[i] < -pad) posX[i] = W+pad;
-    if (posY[i] > H+pad) posY[i] = -pad; if (posY[i] < -pad) posY[i] = H+pad;
+    if (posX[i] < 0)  posX[i] = 0; if (posX[i] > W) posX[i] = W;
+    if (posY[i] < 0)  posY[i] = 0; if (posY[i] > H) posY[i] = H;
   }
 
 }
