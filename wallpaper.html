@@ -103,6 +103,16 @@ app.stage.addChild(skySprite);
 const world = new PIXI.Container();
 app.stage.addChild(world);
 
+// Cadre visuel des bords
+const borderGfx = new PIXI.Graphics();
+app.stage.addChild(borderGfx);
+function drawBorder() {
+  borderGfx.clear();
+  borderGfx.lineStyle(1.5, 0x4a9eff, 0.12);
+  borderGfx.drawRect(1, 1, W - 2, H - 2);
+}
+drawBorder();
+
 
 const birdContainer = new PIXI.ParticleContainer(MAX_N, {
   tint: true, position: true, rotation: true, scale: true, alpha: false,
@@ -170,13 +180,13 @@ function stepPhysics() {
     if (aliCnt > 0) { const [fx,fy] = steer(aliX/aliCnt, aliY/aliCnt, ALI_W, f);   accX[i]+=fx; accY[i]+=fy; }
     if (cohCnt > 0) { const [fx,fy] = steer(cohX/cohCnt-px, cohY/cohCnt-py, COH_W, f*0.6); accX[i]+=fx; accY[i]+=fy; }
 
-    // Répulsion des bords
-    const margin = Math.min(W, H) * 0.18;
-    const maxF = SPEED * 0.13;
-    if (px < margin)        accX[i] += maxF * Math.pow(1 - px/margin, 2);
-    if (px > W - margin)    accX[i] -= maxF * Math.pow(1 - (W-px)/margin, 2);
-    if (py < margin)        accY[i] += maxF * Math.pow(1 - py/margin, 2);
-    if (py > H - margin)    accY[i] -= maxF * Math.pow(1 - (H-py)/margin, 2);
+    // Répulsion des bords — marge large, force forte
+    const margin = Math.min(W, H) * 0.22;
+    const maxF = SPEED * 0.55;
+    if (px < margin)     accX[i] += maxF * Math.pow(1 - px / margin, 2);
+    if (px > W - margin) accX[i] -= maxF * Math.pow(1 - (W - px) / margin, 2);
+    if (py < margin)     accY[i] += maxF * Math.pow(1 - py / margin, 2);
+    if (py > H - margin) accY[i] -= maxF * Math.pow(1 - (H - py) / margin, 2);
 
     // Fuite douce de la souris
     if (mActive) {
@@ -196,8 +206,11 @@ function stepPhysics() {
     if (vm > SPEED) { const r = SPEED/vm; velX[i]*=r; velY[i]*=r; }
     posX[i] += velX[i]; posY[i] += velY[i];
     accX[i] = 0; accY[i] = 0;
-    if (posX[i] < 0)  posX[i] = 0; if (posX[i] > W) posX[i] = W;
-    if (posY[i] < 0)  posY[i] = 0; if (posY[i] > H) posY[i] = H;
+    // Rebond dur en fallback (si la force n'a pas suffi)
+    if (posX[i] < 1)   { posX[i] = 1;   velX[i] =  Math.abs(velX[i]); }
+    if (posX[i] > W-1) { posX[i] = W-1; velX[i] = -Math.abs(velX[i]); }
+    if (posY[i] < 1)   { posY[i] = 1;   velY[i] =  Math.abs(velY[i]); }
+    if (posY[i] > H-1) { posY[i] = H-1; velY[i] = -Math.abs(velY[i]); }
   }
 
 }
@@ -233,6 +246,7 @@ window.addEventListener('resize', () => {
   skyTex = makeSkyTexture(W, H);
   skySprite.texture = skyTex;
   skySprite.width = W; skySprite.height = H;
+  drawBorder();
 });
 </script>
 </body>
